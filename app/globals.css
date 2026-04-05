@@ -1,0 +1,45 @@
+@import "tailwindcss";
+
+@theme {
+  /* Khai báo màu sắc cho Nghe Hustle */
+  --color-gold-500: #F5A800;
+  --color-brand-black: #0A0A0A;
+  --color-brand-gray-dark: #111111;
+  --color-brand-gray-mid: #1A1A1A;
+
+  /* Khai báo Font chữ */
+  --font-display: var(--font-bebas);
+  --font-heading: var(--font-barlow-condensed);
+  --font-body: var(--font-barlow);
+
+  /* Định nghĩa các hiệu ứng chuyển động */
+  @keyframes marquee {
+    from { transform: translateX(0); }
+    to { transform: translateX(-50%); }
+  }
+  --animate-marquee: marquee 20s linear infinite;
+
+  @keyframes spin-slow {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+  --animate-spin-slow: spin-slow 8s linear infinite;
+}
+
+:root {
+  --background: #0A0A0A;
+  --foreground: #ffffff;
+}
+
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-body);
+}
+
+/* Fix lỗi hiển thị cho các lớp layer */
+@layer base {
+  * {
+    @apply border-white/10;
+  }
+}
