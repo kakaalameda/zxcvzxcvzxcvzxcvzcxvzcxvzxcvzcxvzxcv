@@ -3,7 +3,7 @@ import { Barlow, Barlow_Condensed, Bebas_Neue } from "next/font/google";
 import { Providers } from "@/components/providers";
 import "./globals.css";
 import { Navbar } from "@/components/navbar";
-import { Footer } from "@/components/Footer";
+import { Footer } from "@/components/footer";
 const bebasNeue = Bebas_Neue({
   weight: "400",
   variable: "--font-bebas",
