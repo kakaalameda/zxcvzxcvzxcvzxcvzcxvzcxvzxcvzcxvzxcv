@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Barlow, Barlow_Condensed, Bebas_Neue } from "next/font/google";
 import { Providers } from "@/components/providers";
 import "./globals.css";
-import Navbar from "@/components/navbar";
+import { Navbar } from "@/components/navbar";
 
 const bebasNeue = Bebas_Neue({
   weight: "400",
