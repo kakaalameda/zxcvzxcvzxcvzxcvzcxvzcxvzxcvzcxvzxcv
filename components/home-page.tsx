@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useCart } from "@/components/cart-context";
 import { ProductMedia } from "@/components/product-media";
 import {
@@ -132,6 +132,16 @@ function ProductCard({ product }: { product: Product }) {
   const { addItem } = useCart();
   const [added, setAdded] = useState(false);
   const defaultSize = getDefaultSize(product);
+  const timeoutRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    // Cleanup timeout khi component unmount để tránh setState trên component đã huỷ
+    return () => {
+      if (timeoutRef.current !== null) {
+        window.clearTimeout(timeoutRef.current);
+      }
+    };
+  }, []);
 
   const handleAdd = (event: React.MouseEvent) => {
     event.preventDefault();
@@ -143,7 +153,14 @@ function ProductCard({ product }: { product: Product }) {
 
     addItem(buildCartItem(product, getDefaultColor(product), defaultSize));
     setAdded(true);
-    window.setTimeout(() => setAdded(false), 1500);
+
+    if (timeoutRef.current !== null) {
+      window.clearTimeout(timeoutRef.current);
+    }
+    timeoutRef.current = window.setTimeout(() => {
+      setAdded(false);
+      timeoutRef.current = null;
+    }, 1500);
   };
 
   const tagStyles: Record<NonNullable<Product["tagVariant"]>, string> = {

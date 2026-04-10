@@ -12,6 +12,7 @@ import {
   getStoreProductById,
   getStoreVoucherByCode,
 } from "@/lib/repositories/storefront";
+import type { Database } from "@/lib/supabase/types";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { hasSupabaseAdminEnv } from "@/lib/supabase/env";
 import { guestOrderSchema, type GuestOrderPayload } from "@/lib/validations/order";
@@ -52,7 +53,25 @@ interface ResolvedOrderItem {
   sub: string;
   price: number;
   bgClass: string;
+  colorName: string;
+  size: ProductSize;
 }
+
+type OrderSupabaseClient = NonNullable<ReturnType<typeof createSupabaseAdminClient>>;
+type ProductColorRow = Database["public"]["Tables"]["product_colors"]["Row"];
+type OrderInsert = Database["public"]["Tables"]["orders"]["Insert"];
+type OrderItemInsert = Database["public"]["Tables"]["order_items"]["Insert"];
+
+interface ReservedStockClaim {
+  productId: number;
+  colorId: number;
+  qty: number;
+  disabledSizes: boolean;
+}
+
+const MAX_STOCK_RESERVE_ATTEMPTS = 5;
+
+let createGuestOrderWithStockRpcUnavailable = false;
 
 function cleanText(value: string | null | undefined): string {
   return value?.trim() ?? "";
@@ -73,8 +92,28 @@ function buildOrderNumber(): string {
     String(date.getMonth() + 1).padStart(2, "0"),
     String(date.getDate()).padStart(2, "0"),
   ].join("");
-  const suffix = Math.random().toString().slice(2, 8);
+  // Dùng crypto.randomUUID() thay Math.random() để đảm bảo tính ngẫu nhiên mật mã học
+  const suffix = crypto.randomUUID().replace(/-/g, "").slice(0, 6).toUpperCase();
   return `NH${yymmdd}${suffix}`;
+}
+
+function isOrderInputMessage(message: string): boolean {
+  return [
+    "does not exist",
+    "Invalid color",
+    "Invalid size",
+    "out of stock",
+    "Order items are required.",
+    "Invalid product",
+  ].some((pattern) => message.includes(pattern));
+}
+
+function shouldFallbackRpc(errorMessage: string, functionName: string) {
+  return (
+    errorMessage.includes(`Could not find the function public.${functionName}`) ||
+    (errorMessage.includes("in the schema cache") &&
+      errorMessage.includes(functionName))
+  );
 }
 
 function validateCustomer(customer: CheckoutCustomerInput): CheckoutCustomerInput {
@@ -156,6 +195,8 @@ async function resolveOrderItems(items: NewCartItem[]): Promise<ResolvedOrderIte
         sub: getProductVariantLabel(color.name, size),
         price: product.price,
         bgClass: color.bgClass,
+        colorName: color.name,
+        size,
       };
     }),
   );
@@ -187,11 +228,384 @@ async function releaseVoucherUsage(voucher: Voucher) {
     return;
   }
 
-  const nextCount = Math.max(0, (voucher.usedCount ?? 0));
+  // Trừ 1 để hoàn tác lượt sử dụng voucher khi đơn hàng thất bại
+  const nextCount = Math.max(0, (voucher.usedCount ?? 0) - 1);
   await supabase
     .from("vouchers")
     .update({ used_count: nextCount })
     .eq("code", voucher.code);
+}
+
+function mapOrderPersistenceError(error: unknown): Error {
+  if (error instanceof OrderInputError) {
+    return error;
+  }
+
+  const message =
+    error instanceof Error ? error.message : "Failed to persist order.";
+
+  if (isOrderInputMessage(message)) {
+    return new OrderInputError(message);
+  }
+
+  return new Error(message);
+}
+
+async function getProductColorRow(
+  supabase: OrderSupabaseClient,
+  productId: number,
+  colorName: string,
+) {
+  const { data, error } = await supabase
+    .from("product_colors")
+    .select("id, product_id, name, stock_count")
+    .eq("product_id", productId)
+    .eq("name", colorName)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data as Pick<
+    ProductColorRow,
+    "id" | "product_id" | "name" | "stock_count"
+  > | null);
+}
+
+async function assertSizeStillAvailable(
+  supabase: OrderSupabaseClient,
+  item: ResolvedOrderItem,
+  colorId: number,
+) {
+  const { data, error } = await supabase
+    .from("product_sizes")
+    .select("id")
+    .eq("product_id", item.productId)
+    .eq("size", item.size)
+    .eq("available", true)
+    .or(`color_id.eq.${colorId},color_id.is.null`)
+    .limit(1);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  if (!data?.length) {
+    throw new OrderInputError(`Invalid size for product ${item.productId}.`);
+  }
+}
+
+async function syncProductStockCounts(
+  supabase: OrderSupabaseClient,
+  productIds: number[],
+) {
+  for (const productId of [...new Set(productIds)]) {
+    const { data, error } = await supabase
+      .from("product_colors")
+      .select("stock_count")
+      .eq("product_id", productId);
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    const nextStockCount = (data ?? []).reduce(
+      (sum, color) => sum + color.stock_count,
+      0,
+    );
+
+    const { error: updateError } = await supabase
+      .from("products")
+      .update({ stock_count: nextStockCount })
+      .eq("id", productId);
+
+    if (updateError) {
+      throw new Error(updateError.message);
+    }
+  }
+}
+
+async function reserveOrderItemStock(
+  supabase: OrderSupabaseClient,
+  item: ResolvedOrderItem,
+): Promise<ReservedStockClaim> {
+  for (let attempt = 0; attempt < MAX_STOCK_RESERVE_ATTEMPTS; attempt += 1) {
+    const color = await getProductColorRow(supabase, item.productId, item.colorName);
+
+    if (!color) {
+      throw new OrderInputError(`Invalid color for product ${item.productId}.`);
+    }
+
+    await assertSizeStillAvailable(supabase, item, color.id);
+
+    if (color.stock_count < item.qty) {
+      throw new OrderInputError(
+        `Selected color is out of stock for product ${item.productId}.`,
+      );
+    }
+
+    const nextStockCount = color.stock_count - item.qty;
+    const { data, error } = await supabase
+      .from("product_colors")
+      .update({ stock_count: nextStockCount })
+      .eq("id", color.id)
+      .eq("stock_count", color.stock_count)
+      .select("id")
+      .maybeSingle();
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    if (!data) {
+      continue;
+    }
+
+    const disabledSizes = nextStockCount <= 0;
+    if (disabledSizes) {
+      const { error: sizeError } = await supabase
+        .from("product_sizes")
+        .update({ available: false })
+        .eq("product_id", item.productId)
+        .eq("color_id", color.id);
+
+      if (sizeError) {
+        await releaseReservedStock(supabase, {
+          productId: item.productId,
+          colorId: color.id,
+          qty: item.qty,
+          disabledSizes: false,
+        });
+        throw new Error(sizeError.message);
+      }
+    }
+
+    return {
+      productId: item.productId,
+      colorId: color.id,
+      qty: item.qty,
+      disabledSizes,
+    };
+  }
+
+  throw new Error(
+    `Failed to reserve stock for product ${item.productId} because inventory changed concurrently.`,
+  );
+}
+
+async function releaseReservedStock(
+  supabase: OrderSupabaseClient,
+  claim: ReservedStockClaim,
+) {
+  for (let attempt = 0; attempt < MAX_STOCK_RESERVE_ATTEMPTS; attempt += 1) {
+    const { data, error } = await supabase
+      .from("product_colors")
+      .select("stock_count")
+      .eq("id", claim.colorId)
+      .maybeSingle();
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    if (!data) {
+      return;
+    }
+
+    const { data: updatedColor, error: updateError } = await supabase
+      .from("product_colors")
+      .update({ stock_count: data.stock_count + claim.qty })
+      .eq("id", claim.colorId)
+      .eq("stock_count", data.stock_count)
+      .select("id")
+      .maybeSingle();
+
+    if (updateError) {
+      throw new Error(updateError.message);
+    }
+
+    if (!updatedColor) {
+      continue;
+    }
+
+    if (claim.disabledSizes) {
+      const { error: sizeError } = await supabase
+        .from("product_sizes")
+        .update({ available: true })
+        .eq("product_id", claim.productId)
+        .eq("color_id", claim.colorId);
+
+      if (sizeError) {
+        throw new Error(sizeError.message);
+      }
+    }
+
+    return;
+  }
+
+  throw new Error(`Failed to release stock for product ${claim.productId}.`);
+}
+
+async function rollbackStockReservations(
+  supabase: OrderSupabaseClient,
+  claims: ReservedStockClaim[],
+) {
+  const issues: string[] = [];
+
+  for (const claim of [...claims].reverse()) {
+    try {
+      await releaseReservedStock(supabase, claim);
+    } catch (error) {
+      issues.push(error instanceof Error ? error.message : "Stock rollback failed.");
+    }
+  }
+
+  try {
+    await syncProductStockCounts(
+      supabase,
+      claims.map((claim) => claim.productId),
+    );
+  } catch (error) {
+    issues.push(
+      error instanceof Error ? error.message : "Product stock sync failed.",
+    );
+  }
+
+  return issues.length ? issues.join(" ") : null;
+}
+
+async function cleanupFailedOrder(
+  supabase: OrderSupabaseClient,
+  orderId: string,
+) {
+  const issues: string[] = [];
+
+  const { error: itemDeleteError } = await supabase
+    .from("order_items")
+    .delete()
+    .eq("order_id", orderId);
+  if (itemDeleteError) {
+    issues.push(itemDeleteError.message);
+  }
+
+  const { error: orderDeleteError } = await supabase
+    .from("orders")
+    .delete()
+    .eq("id", orderId);
+  if (orderDeleteError) {
+    issues.push(orderDeleteError.message);
+  }
+
+  return issues.length ? issues.join(" ") : null;
+}
+
+async function createOrderWithFallback(args: {
+  supabase: OrderSupabaseClient;
+  orderNumber: string;
+  customer: CheckoutCustomerInput;
+  items: ResolvedOrderItem[];
+  paymentMethod: PaymentMethod;
+  voucherCode: string | null;
+  discountPct: number;
+  discountLabel: string | null;
+  subtotal: number;
+  discountAmount: number;
+  shippingFee: number;
+  total: number;
+}) {
+  const reservations: ReservedStockClaim[] = [];
+  let orderId: string | null = null;
+
+  try {
+    for (const item of args.items) {
+      reservations.push(await reserveOrderItemStock(args.supabase, item));
+    }
+
+    const orderInsert: OrderInsert = {
+      order_number: args.orderNumber,
+      customer_name: args.customer.name,
+      customer_phone: args.customer.phone,
+      customer_email: toNullable(args.customer.email),
+      province: args.customer.province,
+      district: toNullable(args.customer.district),
+      ward: toNullable(args.customer.ward),
+      address: args.customer.address,
+      note: toNullable(args.customer.note),
+      payment_method: args.paymentMethod,
+      voucher_code: args.voucherCode,
+      discount_pct: args.discountPct,
+      discount_label: args.discountLabel,
+      subtotal: args.subtotal,
+      discount_amount: args.discountAmount,
+      shipping_fee: args.shippingFee,
+      total: args.total,
+      status: "pending",
+    };
+
+    const { data: orderRecord, error: orderError } = await args.supabase
+      .from("orders")
+      .insert(orderInsert)
+      .select("id")
+      .single();
+
+    if (orderError || !orderRecord?.id) {
+      throw new Error(orderError?.message ?? "Failed to create order.");
+    }
+
+    orderId = orderRecord.id;
+    const persistedOrderId = orderRecord.id;
+
+    const orderItems: OrderItemInsert[] = args.items.map((item) => ({
+      order_id: persistedOrderId,
+      product_id: item.productId,
+      product_name: item.name,
+      product_href: item.href,
+      variant_label: item.sub,
+      qty: item.qty,
+      unit_price: item.price,
+      line_total: item.price * item.qty,
+      bg_class: item.bgClass,
+    }));
+
+    const { error: orderItemsError } = await args.supabase
+      .from("order_items")
+      .insert(orderItems);
+
+    if (orderItemsError) {
+      throw new Error(orderItemsError.message);
+    }
+
+    await syncProductStockCounts(
+      args.supabase,
+      reservations.map((claim) => claim.productId),
+    );
+  } catch (error) {
+    const cleanupIssues: string[] = [];
+
+    if (orderId) {
+      const orderCleanupIssue = await cleanupFailedOrder(args.supabase, orderId);
+      if (orderCleanupIssue) {
+        cleanupIssues.push(orderCleanupIssue);
+      }
+    }
+
+    const rollbackIssue = await rollbackStockReservations(
+      args.supabase,
+      reservations,
+    );
+    if (rollbackIssue) {
+      cleanupIssues.push(rollbackIssue);
+    }
+
+    if (cleanupIssues.length) {
+      const baseMessage =
+        error instanceof Error ? error.message : "Failed to persist order.";
+      throw new Error(`${baseMessage} Cleanup failed: ${cleanupIssues.join(" ")}`);
+    }
+
+    throw error;
+  }
 }
 
 export async function createOrder(rawInput: unknown): Promise<CreateOrderResult> {
@@ -226,64 +640,89 @@ export async function createOrder(rawInput: unknown): Promise<CreateOrderResult>
     await claimVoucherUsage(voucher);
   }
 
-  const { data: orderRow, error: orderError } = await supabase
-    .from("orders")
-    .insert({
-      order_number: orderNumber,
-      customer_name: customer.name,
-      customer_phone: customer.phone,
-      customer_email: toNullable(customer.email),
-      province: customer.province,
-      district: toNullable(customer.district),
-      ward: toNullable(customer.ward),
-      address: customer.address,
-      note: toNullable(customer.note),
-      payment_method: input.paymentMethod,
-      voucher_code: voucher?.code ?? null,
-      discount_pct: discountPct,
-      discount_label: discountLabel,
-      subtotal,
-      discount_amount: discountAmount,
-      shipping_fee: shippingFee,
-      total,
-      status: "pending",
-    })
-    .select("id, order_number")
-    .single();
+  try {
+    if (createGuestOrderWithStockRpcUnavailable) {
+      await createOrderWithFallback({
+        supabase,
+        orderNumber,
+        customer,
+        items,
+        paymentMethod: input.paymentMethod,
+        voucherCode: voucher?.code ?? null,
+        discountPct,
+        discountLabel,
+        subtotal,
+        discountAmount,
+        shippingFee,
+        total,
+      });
+    } else {
+      const { error: orderError } = await supabase.rpc(
+        "create_guest_order_with_stock",
+        {
+          p_order_number: orderNumber,
+          p_customer_name: customer.name,
+          p_customer_phone: customer.phone,
+          p_customer_email: toNullable(customer.email),
+          p_province: customer.province,
+          p_district: toNullable(customer.district),
+          p_ward: toNullable(customer.ward),
+          p_address: customer.address,
+          p_note: toNullable(customer.note),
+          p_payment_method: input.paymentMethod,
+          p_voucher_code: voucher?.code ?? null,
+          p_discount_pct: discountPct,
+          p_discount_label: discountLabel,
+          p_subtotal: subtotal,
+          p_discount_amount: discountAmount,
+          p_shipping_fee: shippingFee,
+          p_total: total,
+          p_items: items.map((item) => ({
+            productId: item.productId,
+            qty: item.qty,
+            href: item.href,
+            name: item.name,
+            sub: item.sub,
+            price: item.price,
+            bgClass: item.bgClass,
+            colorName: item.colorName,
+            size: item.size,
+          })),
+        },
+      );
 
-  if (orderError || !orderRow) {
+      if (orderError) {
+        if (shouldFallbackRpc(orderError.message, "create_guest_order_with_stock")) {
+          createGuestOrderWithStockRpcUnavailable = true;
+          await createOrderWithFallback({
+            supabase,
+            orderNumber,
+            customer,
+            items,
+            paymentMethod: input.paymentMethod,
+            voucherCode: voucher?.code ?? null,
+            discountPct,
+            discountLabel,
+            subtotal,
+            discountAmount,
+            shippingFee,
+            total,
+          });
+        } else {
+          throw new Error(orderError.message);
+        }
+      }
+    }
+  } catch (error) {
     if (voucher) {
       await releaseVoucherUsage(voucher);
     }
 
-    throw new Error(orderError?.message ?? "Failed to create order.");
-  }
-
-  const { error: itemError } = await supabase.from("order_items").insert(
-    items.map((item) => ({
-      order_id: orderRow.id,
-      product_id: item.productId,
-      product_name: item.name,
-      product_href: item.href,
-      variant_label: item.sub,
-      qty: item.qty,
-      unit_price: item.price,
-      line_total: item.price * item.qty,
-      bg_class: item.bgClass,
-    })),
-  );
-
-  if (itemError) {
-    await supabase.from("orders").delete().eq("id", orderRow.id);
-    if (voucher) {
-      await releaseVoucherUsage(voucher);
-    }
-
-    throw new Error(itemError.message);
+    throw mapOrderPersistenceError(error);
   }
 
   return {
-    orderNumber: orderRow.order_number,
+    orderNumber,
     persisted: true,
   };
 }

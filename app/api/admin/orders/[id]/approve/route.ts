@@ -14,11 +14,18 @@ export async function POST(
   }
 
   try {
-    const payload = adminOrderApprovalSchema.parse(await request.json());
+    const rawBody = await request.text();
+    const payload = adminOrderApprovalSchema.parse(
+      rawBody ? JSON.parse(rawBody) : {},
+    );
     const { id } = await params;
-    await confirmAdminOrder(context.supabase, id, payload.trackingCode);
+    const result = await confirmAdminOrder(
+      context.supabase,
+      id,
+      payload.trackingCode,
+    );
 
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true, ...result });
   } catch (error) {
     if (error instanceof ZodError) {
       return NextResponse.json(

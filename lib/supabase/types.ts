@@ -96,6 +96,7 @@ export interface Database {
           name: string;
           hex: string;
           bg_class: string;
+          stock_count: number;
           position: number;
         };
         Insert: {
@@ -104,6 +105,7 @@ export interface Database {
           name: string;
           hex: string;
           bg_class: string;
+          stock_count?: number;
           position?: number;
         };
         Update: Partial<Database["public"]["Tables"]["product_colors"]["Insert"]>;
@@ -129,6 +131,7 @@ export interface Database {
         Row: {
           id: number;
           product_id: number;
+          color_id: number | null;
           alt: string;
           bg_class: string;
           icon_path: string;
@@ -138,6 +141,7 @@ export interface Database {
         Insert: {
           id?: number;
           product_id: number;
+          color_id?: number | null;
           alt: string;
           bg_class: string;
           icon_path: string;
@@ -151,6 +155,7 @@ export interface Database {
         Row: {
           id: number;
           product_id: number;
+          color_id: number | null;
           size: "S" | "M" | "L" | "XL" | "XXL";
           available: boolean;
           position: number;
@@ -158,6 +163,7 @@ export interface Database {
         Insert: {
           id?: number;
           product_id: number;
+          color_id?: number | null;
           size: "S" | "M" | "L" | "XL" | "XXL";
           available?: boolean;
           position?: number;
@@ -221,6 +227,46 @@ export interface Database {
         Update: Partial<Database["public"]["Tables"]["products"]["Insert"]>;
         Relationships: [];
       };
+      shipping_api_configs: {
+        Row: {
+          provider: string;
+          base_url: string;
+          api_token: string;
+          client_source: string;
+          pick_name: string;
+          pick_address_id: string | null;
+          pick_address: string;
+          pick_province: string;
+          pick_district: string;
+          pick_ward: string | null;
+          pick_tel: string;
+          transport: "road" | "fly";
+          default_product_weight: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          provider: string;
+          base_url: string;
+          api_token: string;
+          client_source: string;
+          pick_name: string;
+          pick_address_id?: string | null;
+          pick_address: string;
+          pick_province: string;
+          pick_district: string;
+          pick_ward?: string | null;
+          pick_tel: string;
+          transport?: "road" | "fly";
+          default_product_weight?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<
+          Database["public"]["Tables"]["shipping_api_configs"]["Insert"]
+        >;
+        Relationships: [];
+      };
       vouchers: {
         Row: {
           code: string;
@@ -249,7 +295,53 @@ export interface Database {
       };
     };
     Views: Record<string, never>;
-    Functions: Record<string, never>;
+    Functions: {
+      admin_upsert_product: {
+        Args: {
+          p_product_id: number | null;
+          p_name: string;
+          p_subtitle: string;
+          p_category: "Tee" | "Hoodie" | "Pants";
+          p_description: string;
+          p_price: number;
+          p_old_price: number | null;
+          p_tag: string | null;
+          p_tag_variant: "gold" | "white" | "red" | "outline" | null;
+          p_rating: number;
+          p_review_count: number;
+          p_featured: boolean;
+          p_sort_order: number;
+          p_specs: Json;
+          p_features: Json;
+          p_color_variants: Json;
+          p_general_images: Json;
+        };
+        Returns: number;
+      };
+      create_guest_order_with_stock: {
+        Args: {
+          p_order_number: string;
+          p_customer_name: string;
+          p_customer_phone: string;
+          p_customer_email: string | null;
+          p_province: string;
+          p_district: string | null;
+          p_ward: string | null;
+          p_address: string;
+          p_note: string | null;
+          p_payment_method: "cod" | "qr";
+          p_voucher_code: string | null;
+          p_discount_pct: number;
+          p_discount_label: string | null;
+          p_subtotal: number;
+          p_discount_amount: number;
+          p_shipping_fee: number;
+          p_total: number;
+          p_items: Json;
+        };
+        Returns: string;
+      };
+    };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;
   };

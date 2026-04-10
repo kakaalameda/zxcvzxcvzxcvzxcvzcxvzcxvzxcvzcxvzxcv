@@ -6,7 +6,9 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
+  useRef,
   useState,
   useSyncExternalStore,
 } from "react";
@@ -246,9 +248,16 @@ function CartItemRow({ item }: { item: CartItem }) {
   const { removeItem, changeQty } = useCart();
   const [removing, setRemoving] = useState(false);
 
+  // Dùng useEffect để đảm bảo timeout được clearTimeout khi component unmount,
+  // tránh gọi removeItem trên component đã bị huỷ (memory leak).
+  useEffect(() => {
+    if (!removing) return;
+    const timeoutId = window.setTimeout(() => removeItem(item.key), 220);
+    return () => window.clearTimeout(timeoutId);
+  }, [removing, removeItem, item.key]);
+
   const handleRemove = () => {
     setRemoving(true);
-    window.setTimeout(() => removeItem(item.key), 220);
   };
 
   return (

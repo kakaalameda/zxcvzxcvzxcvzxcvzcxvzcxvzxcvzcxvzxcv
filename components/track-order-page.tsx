@@ -59,6 +59,7 @@ export function TrackOrderPage() {
   const form = useForm<TrackOrderLookupPayload>({
     resolver: zodResolver(trackOrderLookupSchema),
     defaultValues: {
+      orderNumber: "",
       phone: "",
     },
   });
@@ -89,8 +90,8 @@ export function TrackOrderPage() {
       setOrders(nextOrders);
       setLookupMessage(
         nextOrders.length
-          ? `Found ${nextOrders.length} order(s) for this phone number.`
-          : "No orders matched this phone number.",
+          ? `Found ${nextOrders.length} matching order.`
+          : "No order matched the provided order number and phone number.",
       );
     });
   });
@@ -104,10 +105,22 @@ export function TrackOrderPage() {
             LOOK UP YOUR ORDER
           </h1>
           <p className="mt-4 max-w-2xl text-sm text-white/60">
-            Enter the phone number used at checkout to see all matching guest orders.
+            Enter the order number and checkout phone number to load one guest order securely.
           </p>
 
           <form className="mt-8 space-y-4" onSubmit={onSubmit}>
+            <div className="space-y-2">
+              <Label htmlFor="track-order-number">Order number</Label>
+              <Input
+                id="track-order-number"
+                placeholder="NH260407123456"
+                {...form.register("orderNumber")}
+              />
+              <p className="text-xs text-red-400">
+                {form.formState.errors.orderNumber?.message}
+              </p>
+            </div>
+
             <div className="space-y-2">
               <Label htmlFor="track-phone">Phone number</Label>
               <div className="flex flex-col gap-3 sm:flex-row">
@@ -214,7 +227,7 @@ export function TrackOrderPage() {
             ))
           ) : (
             <div className="rounded-[2rem] border border-dashed border-white/10 px-6 py-14 text-center text-sm text-white/40">
-              Search with your checkout phone number to load order history.
+              Search with your order number and checkout phone number to load the order.
             </div>
           )}
         </section>

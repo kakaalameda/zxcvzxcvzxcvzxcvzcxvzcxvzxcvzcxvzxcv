@@ -8,12 +8,15 @@ export interface ProductImage {
   bgClass: string;
   iconPath: string;
   imageUrl?: string;
+  colorId?: number | null;
 }
 
 export interface ProductColor {
+  id?: number;
   name: string;
   hex: string;
   bgClass: string;
+  stockCount?: number;
 }
 
 export interface ProductSizeOption {
@@ -606,8 +609,13 @@ export function getVoucherByCode(code: string): Voucher | null {
   return VOUCHERS.find((voucher) => voucher.code === normalized) ?? null;
 }
 
+// Map tra cứu O(1) thay vì linear scan O(n) mỗi lần gọi
+const PRODUCTS_BY_ID = new Map<string, Product>(
+  PRODUCTS.map((product) => [String(product.id), product]),
+);
+
 export function getProductById(id: string): Product | undefined {
-  return PRODUCTS.find((product) => String(product.id) === id);
+  return PRODUCTS_BY_ID.get(id);
 }
 
 export function getFeaturedProducts(): Product[] {

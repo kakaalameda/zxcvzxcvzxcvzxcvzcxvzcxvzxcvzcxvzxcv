@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { revalidateTag } from "next/cache";
 import { ZodError } from "zod";
 import { getAdminRouteContext } from "@/lib/auth/admin";
 import {
@@ -24,18 +25,21 @@ export async function PATCH(
       payload,
       Number(id),
     );
+    revalidateTag("store:products", "max");
 
     return NextResponse.json({ productId });
   } catch (error) {
     if (error instanceof ZodError) {
+      console.error("[Admin Products API][PATCH][Payload]:", error);
       return NextResponse.json(
-        { error: error.issues[0]?.message ?? "Invalid product payload." },
+        { error: error.issues[0]?.message ?? "Payload san pham khong hop le." },
         { status: 400 },
       );
     }
 
+    console.error("[Admin Products API][PATCH]:", error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Failed to update product." },
+      { error: error instanceof Error ? error.message : "Khong the cap nhat san pham." },
       { status: 500 },
     );
   }
@@ -53,10 +57,12 @@ export async function DELETE(
   try {
     const { id } = await params;
     await deleteAdminProduct(context.supabase, Number(id));
+    revalidateTag("store:products", "max");
     return NextResponse.json({ ok: true });
   } catch (error) {
+    console.error("[Admin Products API][DELETE]:", error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Failed to delete product." },
+      { error: error instanceof Error ? error.message : "Khong the xoa san pham." },
       { status: 500 },
     );
   }

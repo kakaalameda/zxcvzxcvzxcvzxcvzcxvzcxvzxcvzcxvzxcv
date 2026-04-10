@@ -18,7 +18,8 @@ export async function getOptionalAdminSession() {
     }
 
     return { supabase, user };
-  } catch {
+  } catch (error) {
+    console.error("[Auth Error]:", error);
     return null;
   }
 }
@@ -47,7 +48,8 @@ export async function getAdminRouteContext(): Promise<{
     }
 
     return { supabase, user };
-  } catch {
+  } catch (error) {
+    console.error("[Auth Error]:", error);
     return null;
   }
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useCart } from "@/components/cart-context";
 import { ProductMedia } from "@/components/product-media";
 import {
@@ -117,20 +117,44 @@ const CloseIcon = () => (
 
 function VoucherBanner({ vouchers }: { vouchers: Voucher[] }) {
   const [copied, setCopied] = useState<string | null>(null);
+  const [copyFailed, setCopyFailed] = useState(false);
+  const timeoutRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    // Cleanup timeout khi component unmount
+    return () => {
+      if (timeoutRef.current !== null) {
+        window.clearTimeout(timeoutRef.current);
+      }
+    };
+  }, []);
 
   if (!vouchers.length) {
     return null;
   }
 
+  const scheduleReset = () => {
+    if (timeoutRef.current !== null) {
+      window.clearTimeout(timeoutRef.current);
+    }
+    timeoutRef.current = window.setTimeout(() => {
+      setCopied(null);
+      setCopyFailed(false);
+      timeoutRef.current = null;
+    }, 2000);
+  };
+
   const handleCopy = async (code: string) => {
     try {
       await navigator.clipboard.writeText(code);
+      setCopied(code);
+      setCopyFailed(false);
     } catch {
-      return;
+      // Thông báo lỗi cho người dùng thay vì return âm thầm
+      setCopied(null);
+      setCopyFailed(true);
     }
-
-    setCopied(code);
-    window.setTimeout(() => setCopied(null), 2000);
+    scheduleReset();
   };
 
   return (
@@ -140,6 +164,11 @@ function VoucherBanner({ vouchers }: { vouchers: Voucher[] }) {
           Voucher
         </span>
         <div className="w-px h-4 bg-white/[0.08] flex-shrink-0" />
+        {copyFailed ? (
+          <span className="font-heading text-[0.65rem] tracking-wider text-red-400 whitespace-nowrap flex-shrink-0">
+            Không thể copy — hãy thử thủ công
+          </span>
+        ) : null}
         {vouchers.map((voucher) => {
           const active = copied === voucher.code;
           return (
@@ -293,6 +322,16 @@ function CollectionProductCard({ product }: { product: Product }) {
   const availableSizes = product.sizes.filter((size) => size.available).map((size) => size.size);
   const [selectedSize, setSelectedSize] = useState<ProductSize | null>(getDefaultSize(product));
   const [added, setAdded] = useState(false);
+  const timeoutRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    // Cleanup timeout khi component unmount
+    return () => {
+      if (timeoutRef.current !== null) {
+        window.clearTimeout(timeoutRef.current);
+      }
+    };
+  }, []);
 
   const quickAdd = (event: React.MouseEvent) => {
     event.preventDefault();
@@ -304,7 +343,14 @@ function CollectionProductCard({ product }: { product: Product }) {
 
     addItem(buildCartItem(product, getDefaultColor(product), selectedSize));
     setAdded(true);
-    window.setTimeout(() => setAdded(false), 1800);
+
+    if (timeoutRef.current !== null) {
+      window.clearTimeout(timeoutRef.current);
+    }
+    timeoutRef.current = window.setTimeout(() => {
+      setAdded(false);
+      timeoutRef.current = null;
+    }, 1800);
   };
 
   const tagStyles: Record<Exclude<ProductTagVariant, "outline">, string> = {

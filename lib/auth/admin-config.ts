@@ -13,7 +13,14 @@ export function isAllowedAdminEmail(email: string | null | undefined) {
 
   const allowedEmails = getAllowedAdminEmails();
   if (!allowedEmails.length) {
-    return process.env.NODE_ENV !== "production";
+    // Không cho phép truy cập khi chưa cấu hình email — kể cả môi trường dev.
+    // Trước đây trả về true trong non-production, tạo lỗ hổng bảo mật nghiêm trọng.
+    console.warn(
+      "[Admin Auth]: ADMIN_ALLOWED_EMAILS chưa được cấu hình. " +
+      "Mọi truy cập vào admin đều bị từ chối. " +
+      "Hãy thiết lập ADMIN_ALLOWED_EMAILS trong .env.local.",
+    );
+    return false;
   }
 
   return allowedEmails.includes(normalized);

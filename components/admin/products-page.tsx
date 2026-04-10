@@ -5,25 +5,57 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import type { ColumnDef } from "@tanstack/react-table";
 import { Pencil, Plus, Trash2, Upload } from "lucide-react";
 import { useMemo, useRef, useState, useTransition } from "react";
-import { useForm, useWatch } from "react-hook-form";
+import {
+  type FieldErrors,
+  type UseFormReturn,
+  useFieldArray,
+  useForm,
+  useWatch,
+} from "react-hook-form";
 import { DataTable } from "@/components/admin/data-table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { adminProductSchema } from "@/lib/validations/admin";
-import type { AdminProductRecord } from "@/lib/repositories/admin-products";
+import {
+  PREDEFINED_PRODUCT_COLORS,
+  PRODUCT_TYPES,
+  TAG_VARIANTS,
+  type PredefinedProductColorName,
+} from "@/lib/product-config";
+import {
+  PRODUCT_SIZE_OPTIONS,
+  type AdminProductRecord,
+} from "@/lib/repositories/admin-products";
+import {
+  adminProductSchema,
+  type AdminProductFormValues,
+  type AdminProductPayload,
+} from "@/lib/validations/admin";
 import { cn } from "@/lib/utils";
 
-const PRODUCT_TYPES = ["Tee", "Hoodie", "Pants"] as const;
-const TAG_VARIANTS = ["gold", "white", "red", "outline"] as const;
-const PRODUCT_SIZES = ["S", "M", "L", "XL", "XXL"] as const;
+type AdminProductForm = UseFormReturn<
+  AdminProductFormValues,
+  unknown,
+  AdminProductPayload
+>;
 
 function formatPrice(value: number) {
   return `${Math.round(value).toLocaleString("vi-VN")}d`;
 }
 
-function buildDefaultValues(product?: AdminProductRecord) {
+function buildDefaultVariant(
+  colorName = PREDEFINED_PRODUCT_COLORS[0].name,
+): AdminProductFormValues["colorVariants"][number] {
+  return {
+    colorName,
+    stockCount: 0,
+    sizes: ["M", "L"],
+    images: [],
+  };
+}
+
+function buildDefaultValues(product?: AdminProductRecord): AdminProductFormValues {
   return {
     name: product?.name ?? "",
     subtitle: product?.subtitle ?? "",
@@ -35,20 +67,374 @@ function buildDefaultValues(product?: AdminProductRecord) {
     tagVariant: product?.tagVariant ?? null,
     rating: product?.rating ?? 4.8,
     reviewCount: product?.reviewCount ?? 0,
-    stockCount: product?.stockCount ?? 0,
     featured: product?.featured ?? false,
     sortOrder: product?.sortOrder ?? 0,
-    colorsText:
-      product?.colors.map((color) => `${color.name}|${color.hex}|${color.bgClass}`).join("\n") ??
-      "Black|#111111|from-[#111111] to-[#1e1e1e]",
-    sizes:
-      product?.sizes.filter((size) => size.available).map((size) => size.size) ?? ["M", "L"],
     specsText:
       product?.specs.map((spec) => `${spec.label}|${spec.value}`).join("\n") ??
       "Material|100% Cotton\nWeight|240 GSM",
     featuresText: product?.features.join("\n") ?? "Boxy fit\nDaily wear",
-    imageUrls: product?.imageUrls ?? [],
+    generalImages: product?.generalImages ?? [],
+    colorVariants:
+      product?.colorVariants.length
+        ? product.colorVariants.map((variant) => ({
+            colorName: variant.colorName,
+            stockCount: variant.stockCount,
+            sizes: variant.sizes,
+            images: variant.images,
+          }))
+        : [buildDefaultVariant()],
   };
+}
+
+function getNextColorName(
+  variants: AdminProductFormValues["colorVariants"],
+): PredefinedProductColorName {
+  const used = new Set(variants.map((variant) => variant.colorName));
+
+  return (
+    PREDEFINED_PRODUCT_COLORS.find((color) => !used.has(color.name))?.name ??
+    PREDEFINED_PRODUCT_COLORS[0].name
+  );
+}
+
+async function uploadProductImages(files: FileList | null) {
+  if (!files?.length) {
+    return null;
+  }
+
+  const formData = new FormData();
+  Array.from(files).forEach((file) => {
+    formData.append("files", file);
+  });
+
+  const response = await fetch("/api/admin/uploads/product-images", {
+    method: "POST",
+    body: formData,
+  });
+  const result = (await response.json().catch(() => null)) as
+    | { error?: string; imageUrls?: string[] }
+    | null;
+
+  if (!response.ok || !result?.imageUrls) {
+    throw new Error(result?.error ?? "Khong the upload anh.");
+  }
+
+  return result.imageUrls;
+}
+
+function UploadedImagesField({
+  title,
+  description,
+  namePrefix,
+  fields,
+  form,
+  currentColorNames,
+  defaultAssignedColorName,
+  onAppendImages,
+  onRemove,
+}: {
+  title: string;
+  description: string;
+  namePrefix: `generalImages` | `colorVariants.${number}.images`;
+  fields: {
+    id: string;
+    url: string;
+    assignedColorName?: unknown;
+  }[];
+  form: AdminProductForm;
+  currentColorNames: PredefinedProductColorName[];
+  defaultAssignedColorName: PredefinedProductColorName | null;
+  onAppendImages: (urls: string[]) => void;
+  onRemove: (index: number) => void;
+}) {
+  const uploadRef = useRef<HTMLInputElement | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+
+  const handleUpload = async (files: FileList | null) => {
+    try {
+      setUploadError(null);
+      const urls = await uploadProductImages(files);
+      if (!urls?.length) {
+        return;
+      }
+
+      onAppendImages(urls);
+    } catch (error) {
+      setUploadError(
+        error instanceof Error ? error.message : "Khong the upload anh.",
+      );
+    }
+  };
+
+  return (
+    <div className="space-y-3 rounded-2xl border border-white/10 bg-black/30 p-4">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="font-heading text-sm uppercase tracking-[0.14em] text-white/70">
+            {title}
+          </p>
+          <p className="mt-1 text-xs text-white/45">{description}</p>
+        </div>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => uploadRef.current?.click()}
+        >
+          <Upload className="size-4" />
+          Upload
+        </Button>
+      </div>
+
+      <input
+        ref={uploadRef}
+        type="file"
+        accept="image/*"
+        multiple
+        className="hidden"
+        onChange={(event) => {
+          void handleUpload(event.target.files);
+          event.target.value = "";
+        }}
+      />
+
+      {fields.length ? (
+        <div className="space-y-3">
+          {fields.map((field, index) => (
+            <div
+              key={field.id}
+              className="grid gap-3 rounded-2xl border border-white/10 px-3 py-3 md:grid-cols-[64px_1fr_180px_auto]"
+            >
+              <div className="relative h-16 w-16 overflow-hidden rounded-xl border border-white/10 bg-black">
+                <img
+                  src={field.url}
+                  alt={`${title} ${index + 1}`}
+                  className="h-full w-full object-cover"
+                />
+              </div>
+              <div className="min-w-0">
+                <p className="truncate text-sm text-white/70">{field.url}</p>
+                <input
+                  type="hidden"
+                  {...form.register(`${namePrefix}.${index}.url` as const)}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor={`${namePrefix}-${index}-assigned-color`}>Gan mau</Label>
+                <select
+                  id={`${namePrefix}-${index}-assigned-color`}
+                  className="flex h-9 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm"
+                  {...form.register(
+                    `${namePrefix}.${index}.assignedColorName` as const,
+                  )}
+                  defaultValue={
+                    typeof field.assignedColorName === "string"
+                      ? field.assignedColorName
+                      : defaultAssignedColorName ?? ""
+                  }
+                >
+                  <option value="" className="bg-black text-white">
+                    General / Khong gan mau
+                  </option>
+                  {currentColorNames.map((colorName) => (
+                    <option
+                      key={colorName}
+                      value={colorName}
+                      className="bg-black text-white"
+                    >
+                      {colorName}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex items-center justify-end">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => onRemove(index)}
+                >
+                  Remove
+                </Button>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="rounded-2xl border border-dashed border-white/10 px-4 py-6 text-sm text-white/45">
+          Chua co anh nao trong muc nay.
+        </div>
+      )}
+
+      {uploadError ? <p className="text-xs text-red-400">{uploadError}</p> : null}
+    </div>
+  );
+}
+
+function ColorVariantCard({
+  form,
+  variantIndex,
+  onRemoveVariant,
+  currentColorNames,
+  onColorChange,
+  canRemove,
+}: {
+  form: AdminProductForm;
+  variantIndex: number;
+  onRemoveVariant: (index: number) => void;
+  currentColorNames: PredefinedProductColorName[];
+  onColorChange: (
+    previousColorName: PredefinedProductColorName,
+    nextColorName: PredefinedProductColorName,
+  ) => void;
+  canRemove: boolean;
+}) {
+  const imageFields = useFieldArray({
+    control: form.control,
+    name: `colorVariants.${variantIndex}.images` as const,
+  });
+  const selectedSizes =
+    useWatch({
+      control: form.control,
+      name: `colorVariants.${variantIndex}.sizes` as const,
+    }) ?? [];
+  const selectedColorName = useWatch({
+    control: form.control,
+    name: `colorVariants.${variantIndex}.colorName` as const,
+  });
+  const variantErrors =
+    (form.formState.errors.colorVariants?.[variantIndex] as
+      | FieldErrors<AdminProductPayload["colorVariants"][number]>
+      | undefined) ?? undefined;
+
+  const updateVariantSizes = (size: string, checked: boolean) => {
+    const nextSizes = checked
+      ? [...selectedSizes, size]
+      : selectedSizes.filter((entry) => entry !== size);
+
+    form.setValue(`colorVariants.${variantIndex}.sizes`, nextSizes as never, {
+      shouldDirty: true,
+      shouldValidate: true,
+    });
+  };
+  const colorField = form.register(`colorVariants.${variantIndex}.colorName` as const);
+
+  return (
+    <div className="space-y-4 rounded-3xl border border-white/10 bg-black/30 p-5">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="text-xs uppercase tracking-[0.3em] text-gold-500">
+            Bien the
+          </p>
+          <h3 className="mt-2 font-heading text-lg uppercase tracking-[0.1em] text-white">
+            Mau {variantIndex + 1}
+          </h3>
+        </div>
+        <Button
+          type="button"
+          variant="ghost"
+          disabled={!canRemove}
+          onClick={() => onRemoveVariant(variantIndex)}
+        >
+          <Trash2 className="size-4" />
+          Xoa mau
+        </Button>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <div className="space-y-2">
+          <Label htmlFor={`variant-color-${variantIndex}`}>Mau</Label>
+          <select
+            id={`variant-color-${variantIndex}`}
+            className="flex h-9 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm"
+            {...colorField}
+            defaultValue={selectedColorName}
+            onChange={(event) => {
+              const previousColorName = selectedColorName;
+              colorField.onChange(event);
+
+              if (
+                previousColorName &&
+                previousColorName !== event.target.value
+              ) {
+                onColorChange(
+                  previousColorName,
+                  event.target.value as PredefinedProductColorName,
+                );
+              }
+            }}
+          >
+            {PREDEFINED_PRODUCT_COLORS.map((color) => (
+              <option key={color.name} value={color.name} className="bg-black text-white">
+                {color.name}
+              </option>
+            ))}
+          </select>
+          <p className="text-xs text-red-400">
+            {variantErrors?.colorName?.message as string | undefined}
+          </p>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor={`variant-stock-${variantIndex}`}>Ton kho theo mau</Label>
+          <Input
+            id={`variant-stock-${variantIndex}`}
+            type="number"
+            min={0}
+            {...form.register(`colorVariants.${variantIndex}.stockCount`)}
+          />
+          <p className="text-xs text-red-400">
+            {variantErrors?.stockCount?.message as string | undefined}
+          </p>
+        </div>
+      </div>
+
+      <div className="space-y-3">
+        <Label>Size kha dung cho mau nay</Label>
+        <div className="flex flex-wrap gap-3">
+          {PRODUCT_SIZE_OPTIONS.map((size) => (
+            <label
+              key={`${variantIndex}-${size}`}
+              className={cn(
+                "inline-flex items-center gap-2 rounded-full border px-3 py-2 text-sm",
+                selectedSizes.includes(size)
+                  ? "border-gold-500/40 bg-gold-500/10 text-gold-400"
+                  : "border-white/10 text-white/65",
+              )}
+            >
+              <input
+                type="checkbox"
+                checked={selectedSizes.includes(size)}
+                onChange={(event) => updateVariantSizes(size, event.target.checked)}
+              />
+              {size}
+            </label>
+          ))}
+        </div>
+        <p className="text-xs text-red-400">
+          {variantErrors?.sizes?.message as string | undefined}
+        </p>
+      </div>
+
+      <UploadedImagesField
+        title="Anh rieng cho mau nay"
+        description="Moi anh co dropdown de giu general hoac gan sang mot mau khac."
+        namePrefix={`colorVariants.${variantIndex}.images`}
+        fields={imageFields.fields}
+        form={form}
+        currentColorNames={currentColorNames}
+        defaultAssignedColorName={selectedColorName ?? null}
+        onAppendImages={(urls) => {
+          imageFields.append(
+            urls.map((url) => ({
+              url,
+              assignedColorName: selectedColorName ?? null,
+            })),
+          );
+        }}
+        onRemove={imageFields.remove}
+      />
+    </div>
+  );
 }
 
 export function ProductsPage({
@@ -61,14 +447,36 @@ export function ProductsPage({
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
-  const uploadRef = useRef<HTMLInputElement | null>(null);
-  const form = useForm({
+
+  const form = useForm<AdminProductFormValues, unknown, AdminProductPayload>({
     resolver: zodResolver(adminProductSchema),
     defaultValues: buildDefaultValues(),
   });
 
-  const selectedSizes = useWatch({ control: form.control, name: "sizes" }) ?? [];
-  const imageUrls = useWatch({ control: form.control, name: "imageUrls" }) ?? [];
+  const generalImageFields = useFieldArray({
+    control: form.control,
+    name: "generalImages",
+  });
+  const colorVariantFields = useFieldArray({
+    control: form.control,
+    name: "colorVariants",
+  });
+  const watchedVariants = useWatch({
+    control: form.control,
+    name: "colorVariants",
+  });
+
+  const currentColorNames = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          (watchedVariants ?? [])
+            .map((variant) => variant?.colorName)
+            .filter((value): value is PredefinedProductColorName => Boolean(value)),
+        ),
+      ),
+    [watchedVariants],
+  );
 
   const columns = useMemo<ColumnDef<AdminProductRecord>[]>(
     () => [
@@ -105,7 +513,9 @@ export function ProductsPage({
         accessorKey: "stockCount",
         header: "Stock",
         cell: ({ row }) => (
-          <span className="text-sm text-muted-foreground">{row.original.stockCount}</span>
+          <span className="text-sm text-muted-foreground">
+            {row.original.stockCount}
+          </span>
         ),
       },
       {
@@ -121,6 +531,15 @@ export function ProductsPage({
             )}
           >
             {row.original.featured ? "Yes" : "No"}
+          </span>
+        ),
+      },
+      {
+        accessorKey: "colorVariants",
+        header: "Colors",
+        cell: ({ row }) => (
+          <span className="text-sm text-muted-foreground">
+            {row.original.colorVariants.map((variant) => variant.colorName).join(", ")}
           </span>
         ),
       },
@@ -194,44 +613,61 @@ export function ProductsPage({
     [editingProduct?.id, form],
   );
 
-  const handleSizeToggle = (size: (typeof PRODUCT_SIZES)[number], checked: boolean) => {
-    const nextSizes = checked
-      ? [...selectedSizes, size]
-      : selectedSizes.filter((entry) => entry !== size);
-    form.setValue("sizes", nextSizes, { shouldDirty: true, shouldValidate: true });
+  const syncAssignedColorName = (
+    previousColorName: PredefinedProductColorName,
+    nextColorName: PredefinedProductColorName,
+  ) => {
+    const nextGeneralImages = (form.getValues("generalImages") ?? []).map((image) => ({
+      ...image,
+      assignedColorName:
+        image.assignedColorName === previousColorName
+          ? nextColorName
+          : image.assignedColorName ?? null,
+    }));
+
+    const nextVariants = (form.getValues("colorVariants") ?? []).map((variant) => ({
+      ...variant,
+      images: (variant.images ?? []).map((image) => ({
+        ...image,
+        assignedColorName:
+          image.assignedColorName === previousColorName
+            ? nextColorName
+            : image.assignedColorName ?? null,
+      })),
+    }));
+
+    form.setValue("generalImages", nextGeneralImages, { shouldDirty: true });
+    form.setValue("colorVariants", nextVariants, { shouldDirty: true });
   };
 
-  const handleUpload = async (files: FileList | null) => {
-    if (!files?.length) {
-      return;
-    }
+  const removeVariant = (index: number) => {
+    const removedColorName = form.getValues(`colorVariants.${index}.colorName`);
+    colorVariantFields.remove(index);
 
-    setError(null);
-    setMessage(null);
+    const nextGeneralImages = (form.getValues("generalImages") ?? []).map((image) => ({
+      ...image,
+      assignedColorName:
+        image.assignedColorName === removedColorName
+          ? null
+          : image.assignedColorName ?? null,
+    }));
 
-    const formData = new FormData();
-    Array.from(files).forEach((file) => {
-      formData.append("files", file);
-    });
+    const nextVariants = (form.getValues("colorVariants") ?? []).map((variant) => ({
+      ...variant,
+      images: (variant.images ?? []).map((image) => ({
+        ...image,
+        assignedColorName:
+          image.assignedColorName === removedColorName
+            ? variant.colorName
+            : image.assignedColorName ?? null,
+      })),
+    }));
 
-    const response = await fetch("/api/admin/uploads/product-images", {
-      method: "POST",
-      body: formData,
-    });
-    const result = (await response.json().catch(() => null)) as
-      | { error?: string; imageUrls?: string[] }
-      | null;
-
-    if (!response.ok || !result?.imageUrls) {
-      setError(result?.error ?? "Failed to upload images.");
-      return;
-    }
-
-    form.setValue("imageUrls", [...imageUrls, ...result.imageUrls], {
+    form.setValue("generalImages", nextGeneralImages, { shouldDirty: true });
+    form.setValue("colorVariants", nextVariants, {
       shouldDirty: true,
       shouldValidate: true,
     });
-    setMessage("Images uploaded.");
   };
 
   const onSubmit = form.handleSubmit((values) => {
@@ -277,7 +713,7 @@ export function ProductsPage({
                   Products
                 </h1>
                 <p className="mt-2 text-sm text-white/55">
-                  Manage catalog, stock and image uploads from one place.
+                  Quan ly san pham, bien the mau va anh theo mau trong mot form.
                 </p>
               </div>
               <Button
@@ -313,12 +749,14 @@ export function ProductsPage({
             </h2>
           </div>
 
-          <form className="space-y-5" onSubmit={onSubmit}>
+          <form className="space-y-6" onSubmit={onSubmit}>
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="product-name">Name</Label>
                 <Input id="product-name" {...form.register("name")} />
-                <p className="text-xs text-red-400">{form.formState.errors.name?.message}</p>
+                <p className="text-xs text-red-400">
+                  {form.formState.errors.name?.message}
+                </p>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="product-subtitle">Subtitle</Label>
@@ -334,7 +772,7 @@ export function ProductsPage({
                 <Label htmlFor="product-category">Category</Label>
                 <select
                   id="product-category"
-                  className="flex h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm"
+                  className="flex h-9 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm"
                   {...form.register("category")}
                 >
                   {PRODUCT_TYPES.map((type) => (
@@ -369,7 +807,7 @@ export function ProductsPage({
                 <Label htmlFor="product-tag-variant">Tag variant</Label>
                 <select
                   id="product-tag-variant"
-                  className="flex h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm"
+                  className="flex h-9 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm"
                   {...form.register("tagVariant")}
                 >
                   <option value="" className="bg-black text-white">
@@ -408,15 +846,6 @@ export function ProductsPage({
 
             <div className="grid gap-4 md:grid-cols-3">
               <div className="space-y-2">
-                <Label htmlFor="product-stock-count">Stock</Label>
-                <Input
-                  id="product-stock-count"
-                  type="number"
-                  min={0}
-                  {...form.register("stockCount")}
-                />
-              </div>
-              <div className="space-y-2">
                 <Label htmlFor="product-sort-order">Sort order</Label>
                 <Input
                   id="product-sort-order"
@@ -425,10 +854,12 @@ export function ProductsPage({
                   {...form.register("sortOrder")}
                 />
               </div>
-              <label className="mt-6 flex items-center gap-3 text-sm text-white/70">
-                <input type="checkbox" {...form.register("featured")} />
-                Featured product
-              </label>
+              <div className="md:col-span-2">
+                <label className="mt-7 flex items-center gap-3 text-sm text-white/70">
+                  <input type="checkbox" {...form.register("featured")} />
+                  Featured product
+                </label>
+              </div>
             </div>
 
             <div className="space-y-2">
@@ -443,43 +874,67 @@ export function ProductsPage({
               </p>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="product-colors">Colors</Label>
-              <Textarea
-                id="product-colors"
-                rows={4}
-                placeholder="Black|#111111|from-[#111111] to-[#1e1e1e]"
-                {...form.register("colorsText")}
-              />
-              <p className="text-xs text-white/45">One line per color: Name|#HEX|bgClass</p>
-              <p className="text-xs text-red-400">
-                {form.formState.errors.colorsText?.message}
-              </p>
-            </div>
+            <UploadedImagesField
+              title="Anh chung cua san pham"
+              description="Co the de general hoac gan truc tiep tung anh cho mot mau da tao."
+              namePrefix="generalImages"
+              fields={generalImageFields.fields}
+              form={form}
+              currentColorNames={currentColorNames}
+              defaultAssignedColorName={null}
+              onAppendImages={(urls) => {
+                generalImageFields.append(
+                  urls.map((url) => ({
+                    url,
+                    assignedColorName: null,
+                  })),
+                );
+              }}
+              onRemove={generalImageFields.remove}
+            />
+            <p className="text-xs text-red-400">
+              {form.formState.errors.generalImages?.message as string | undefined}
+            </p>
 
-            <div className="space-y-3">
-              <Label>Sizes</Label>
-              <div className="flex flex-wrap gap-3">
-                {PRODUCT_SIZES.map((size) => (
-                  <label
-                    key={size}
-                    className={cn(
-                      "inline-flex items-center gap-2 rounded-full border px-3 py-2 text-sm",
-                      selectedSizes.includes(size)
-                        ? "border-gold-500/40 bg-gold-500/10 text-gold-400"
-                        : "border-white/10 text-white/65",
-                    )}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={selectedSizes.includes(size)}
-                      onChange={(event) => handleSizeToggle(size, event.target.checked)}
-                    />
-                    {size}
-                  </label>
+            <div className="space-y-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <Label className="text-base">Color variants</Label>
+                  <p className="mt-1 text-xs text-white/45">
+                    Chon mau co san, ton kho theo mau, size theo mau va anh theo mau.
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() =>
+                    colorVariantFields.append(
+                      buildDefaultVariant(getNextColorName(form.getValues("colorVariants"))),
+                    )
+                  }
+                >
+                  <Plus className="size-4" />
+                  Add color
+                </Button>
+              </div>
+
+              <p className="text-xs text-red-400">
+                {form.formState.errors.colorVariants?.message as string | undefined}
+              </p>
+
+              <div className="space-y-4">
+                {colorVariantFields.fields.map((field, index) => (
+                  <ColorVariantCard
+                    key={field.id}
+                    form={form}
+                    variantIndex={index}
+                    onRemoveVariant={removeVariant}
+                    currentColorNames={currentColorNames}
+                    onColorChange={syncAssignedColorName}
+                    canRemove={colorVariantFields.fields.length > 1}
+                  />
                 ))}
               </div>
-              <p className="text-xs text-red-400">{form.formState.errors.sizes?.message}</p>
             </div>
 
             <div className="space-y-2">
@@ -502,70 +957,6 @@ export function ProductsPage({
                 placeholder="Boxy fit"
                 {...form.register("featuresText")}
               />
-            </div>
-
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <Label>Product images</Label>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => uploadRef.current?.click()}
-                >
-                  <Upload className="size-4" />
-                  Upload
-                </Button>
-              </div>
-              <input
-                ref={uploadRef}
-                type="file"
-                accept="image/*"
-                multiple
-                className="hidden"
-                onChange={(event) => {
-                  void handleUpload(event.target.files);
-                  event.target.value = "";
-                }}
-              />
-              <div className="space-y-2">
-                {imageUrls.length ? (
-                  imageUrls.map((url, index) => (
-                    <div
-                      key={`${url}-${index}`}
-                      className="flex items-center gap-3 rounded-2xl border border-white/10 px-3 py-2"
-                    >
-                      <div className="relative h-12 w-12 overflow-hidden rounded-xl border border-white/10 bg-black">
-                        <img
-                          src={url}
-                          alt={`Product image ${index + 1}`}
-                          className="h-full w-full object-cover"
-                        />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm text-white/70">{url}</p>
-                      </div>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="ghost"
-                        onClick={() =>
-                          form.setValue(
-                            "imageUrls",
-                            imageUrls.filter((_, currentIndex) => currentIndex !== index),
-                            { shouldDirty: true, shouldValidate: true },
-                          )
-                        }
-                      >
-                        Remove
-                      </Button>
-                    </div>
-                  ))
-                ) : (
-                  <div className="rounded-2xl border border-dashed border-white/10 px-4 py-6 text-sm text-white/45">
-                    No uploaded images yet.
-                  </div>
-                )}
-              </div>
             </div>
 
             {error ? (

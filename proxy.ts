@@ -35,7 +35,10 @@ export async function proxy(request: NextRequest) {
     }
 
     return response;
-  } catch {
+  } catch (error) {
+    // Ghi log lỗi thực sự thay vì nuốt exception — giúp debug khi DB/config lỗi
+    console.error("[Proxy]: Kiểm tra xác thực admin thất bại.", error);
+
     if (pathname === "/admin/login") {
       return response;
     }

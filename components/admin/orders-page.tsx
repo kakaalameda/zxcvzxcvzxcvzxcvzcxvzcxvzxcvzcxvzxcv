@@ -1,11 +1,10 @@
 "use client";
 
 import type { ColumnDef } from "@tanstack/react-table";
-import { PackageCheck } from "lucide-react";
+import { PackageCheck, XCircle } from "lucide-react";
 import { useMemo, useState, useTransition } from "react";
 import { DataTable } from "@/components/admin/data-table";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import type { AdminOrderRecord } from "@/lib/repositories/admin-orders";
 
@@ -42,6 +41,13 @@ function statusClass(status: AdminOrderRecord["status"]) {
   }
 }
 
+interface OrderActionResponse {
+  error?: string;
+  message?: string;
+  status?: AdminOrderRecord["status"];
+  trackingCode?: string | null;
+}
+
 export function OrdersPage({
   initialOrders,
 }: {
@@ -52,7 +58,6 @@ export function OrdersPage({
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(
     initialOrders[0]?.id ?? null,
   );
-  const [trackingCode, setTrackingCode] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -125,7 +130,6 @@ export function OrdersPage({
             variant="outline"
             onClick={() => {
               setSelectedOrderId(row.original.id);
-              setTrackingCode(row.original.trackingCode ?? "");
               setError(null);
               setMessage(null);
             }}
@@ -138,47 +142,107 @@ export function OrdersPage({
     [],
   );
 
+  const updateOrderState = (
+    orderId: string,
+    nextStatus: AdminOrderRecord["status"],
+    nextTrackingCode: string | null | undefined,
+  ) => {
+    setOrders((current) =>
+      current.map((order) =>
+        order.id === orderId
+          ? {
+              ...order,
+              status: nextStatus,
+              trackingCode:
+                typeof nextTrackingCode === "undefined"
+                  ? order.trackingCode
+                  : nextTrackingCode,
+            }
+          : order,
+      ),
+    );
+  };
+
+  const runOrderAction = (
+    path: string,
+    onSuccess: (result: OrderActionResponse) => void,
+    fallbackError: string,
+  ) => {
+    startTransition(async () => {
+      setError(null);
+      setMessage(null);
+
+      const response = await fetch(path, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({}),
+      });
+
+      const result = (await response.json().catch(() => null)) as
+        | OrderActionResponse
+        | null;
+
+      if (!response.ok) {
+        setError(result?.error ?? fallbackError);
+        return;
+      }
+
+      onSuccess(result ?? {});
+      setMessage(result?.message ?? "Order updated.");
+    });
+  };
+
   const approveOrder = () => {
     if (!selectedOrder || selectedOrder.status !== "pending") {
       return;
     }
 
-    startTransition(async () => {
-      setError(null);
-      setMessage(null);
-
-      const response = await fetch(`/api/admin/orders/${selectedOrder.id}/approve`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          trackingCode,
-        }),
-      });
-      const result = (await response.json().catch(() => null)) as
-        | { error?: string }
-        | null;
-
-      if (!response.ok) {
-        setError(result?.error ?? "Failed to confirm order.");
-        return;
-      }
-
-      setOrders((current) =>
-        current.map((order) =>
-          order.id === selectedOrder.id
-            ? {
-                ...order,
-                status: "confirmed",
-                trackingCode: trackingCode.trim() || null,
-              }
-            : order,
-        ),
-      );
-      setMessage("Order confirmed.");
-    });
+    runOrderAction(
+      `/api/admin/orders/${selectedOrder.id}/approve`,
+      (result) => {
+        updateOrderState(
+          selectedOrder.id,
+          result.status ?? "confirmed",
+          result.trackingCode,
+        );
+      },
+      "Failed to approve order.",
+    );
   };
+
+  const cancelOrder = () => {
+    if (!selectedOrder || !["pending", "confirmed"].includes(selectedOrder.status)) {
+      return;
+    }
+
+    const confirmed = window.confirm(
+      selectedOrder.status === "confirmed"
+        ? "Cancel this order on both GHTK and the local system?"
+        : "Cancel this pending order?",
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    runOrderAction(
+      `/api/admin/orders/${selectedOrder.id}/cancel`,
+      (result) => {
+        updateOrderState(
+          selectedOrder.id,
+          result.status ?? "cancelled",
+          result.trackingCode,
+        );
+      },
+      "Failed to cancel order.",
+    );
+  };
+
+  const canApprove = selectedOrder?.status === "pending";
+  const canCancel =
+    selectedOrder?.status === "pending" || selectedOrder?.status === "confirmed";
 
   return (
     <div className="min-h-screen bg-[#050505] px-4 py-6 text-white md:px-8">
@@ -192,7 +256,7 @@ export function OrdersPage({
                 </p>
                 <h1 className="mt-3 font-display text-4xl tracking-wide">Orders</h1>
                 <p className="mt-2 text-sm text-white/55">
-                  Review guest checkout orders and confirm fulfillment.
+                  Review orders, create GHTK shipments, and cancel safely.
                 </p>
               </div>
               <div className="space-y-2">
@@ -251,7 +315,12 @@ export function OrdersPage({
                   <p className="text-white/60">{selectedOrder.customerEmail}</p>
                 ) : null}
                 <p className="text-sm text-white/70">
-                  {[selectedOrder.address, selectedOrder.ward, selectedOrder.district, selectedOrder.province]
+                  {[
+                    selectedOrder.address,
+                    selectedOrder.ward,
+                    selectedOrder.district,
+                    selectedOrder.province,
+                  ]
                     .filter(Boolean)
                     .join(", ")}
                 </p>
@@ -298,28 +367,37 @@ export function OrdersPage({
                 </div>
               </CardBlock>
 
-              <CardBlock title="Approve & tracking">
+              <CardBlock title="Shipping">
                 <div className="space-y-3">
-                  <div className="space-y-2">
-                    <LabelLine>Tracking code</LabelLine>
-                    <Input
-                      value={trackingCode}
-                      onChange={(event) => setTrackingCode(event.target.value)}
-                      placeholder="Optional tracking code"
-                    />
-                  </div>
-                  <Button
-                    type="button"
-                    className="w-full bg-gold-500 text-black hover:bg-gold-400"
-                    disabled={selectedOrder.status !== "pending" || isPending}
-                    onClick={approveOrder}
-                  >
-                    <PackageCheck className="size-4" />
-                    {isPending ? "Approving..." : "Approve order"}
-                  </Button>
+                  <SummaryRow
+                    label="Tracking"
+                    value={selectedOrder.trackingCode ?? "Not created yet"}
+                  />
                   <p className="text-xs text-white/45">
-                    `pushOrderToGHN(orderId)` is stubbed and will run after approval.
+                    Approve creates a shipment on GHTK using the config from
+                    /admin/cauhinhapi.
                   </p>
+                  <div className="flex gap-3">
+                    <Button
+                      type="button"
+                      className="flex-1 bg-gold-500 text-black hover:bg-gold-400"
+                      disabled={!canApprove || isPending}
+                      onClick={approveOrder}
+                    >
+                      <PackageCheck className="size-4" />
+                      {isPending ? "Processing..." : "Approve order"}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      className="flex-1"
+                      disabled={!canCancel || isPending}
+                      onClick={cancelOrder}
+                    >
+                      <XCircle className="size-4" />
+                      {isPending ? "Processing..." : "Cancel order"}
+                    </Button>
+                  </div>
                 </div>
               </CardBlock>
 
