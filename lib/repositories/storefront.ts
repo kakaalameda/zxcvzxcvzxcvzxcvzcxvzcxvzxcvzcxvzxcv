@@ -5,6 +5,7 @@ import {
 import {
   getFeaturedProducts,
   getProductById,
+  getProductBySlug,
   getProducts,
   getRelatedProducts,
 } from "@/lib/data/products.server";
@@ -23,6 +24,10 @@ export async function getStoreFeaturedProducts(limit = 4): Promise<Product[]> {
 
 export async function getStoreProductById(id: string): Promise<Product | undefined> {
   return getProductById(id);
+}
+
+export async function getStoreProductBySlug(productSlug: string): Promise<Product | undefined> {
+  return getProductBySlug(productSlug);
 }
 
 export async function getStoreRelatedProducts(

@@ -1,0 +1,6 @@
+cd C:\Users\hungd\brand-web-push
+
+& 'C:\Program Files\Git\cmd\git.exe' config user.name "kakaalameda"
+& 'C:\Program Files\Git\cmd\git.exe' config user.email "email-github-cua-ban@example.com"
+& 'C:\Program Files\Git\cmd\git.exe' commit -m "Update brand-web"
+& 'C:\Program Files\Git\cmd\git.exe' push origin main

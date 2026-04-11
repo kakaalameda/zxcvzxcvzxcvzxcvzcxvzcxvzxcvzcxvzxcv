@@ -81,6 +81,11 @@ export const adminProductSchema = z
     rating: z.coerce.number().min(0).max(5),
     reviewCount: z.coerce.number().int().min(0),
     featured: z.coerce.boolean(),
+    isActive: z.coerce.boolean().default(true),
+    slug: z.preprocess(
+      emptyStringToNull,
+      z.string().trim().regex(/^[a-z0-9-]*$/, "Slug chỉ gồm chữ thường, số và dấu gạch ngang").nullable().optional(),
+    ),
     sortOrder: z.coerce.number().int().min(0),
     specsText: z
       .string()

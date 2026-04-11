@@ -2,6 +2,8 @@ import { redirect } from "next/navigation";
 import { AdminLoginForm } from "@/components/admin/admin-login-form";
 import { getOptionalAdminSession } from "@/lib/auth/admin";
 
+export const dynamic = "force-dynamic";
+
 export default async function AdminLoginPage({
   searchParams,
 }: {

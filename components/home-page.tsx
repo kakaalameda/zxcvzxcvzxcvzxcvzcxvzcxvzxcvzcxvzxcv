@@ -84,7 +84,7 @@ function Hero() {
             className="group relative inline-flex items-center gap-2.5 bg-gold-500 text-brand-black font-heading text-base font-bold tracking-widest uppercase px-10 py-4 overflow-hidden border-2 border-gold-500 no-underline transition-all duration-300"
           >
             <span className="absolute inset-0 bg-white scale-x-0 origin-right group-hover:scale-x-100 group-hover:origin-left transition-transform duration-300" />
-            <span className="relative z-10">Shop Now</span>
+            <span className="relative z-10">Mua Ngay</span>
             <ArrowRight className="relative z-10 w-4.5 h-4.5 transition-transform duration-200 group-hover:translate-x-1" />
           </Link>
           <Link

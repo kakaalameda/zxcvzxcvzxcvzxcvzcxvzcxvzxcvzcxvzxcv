@@ -70,6 +70,8 @@ export interface AdminProductRecord {
   stockCount: number;
   featured: boolean;
   sortOrder: number;
+  slug: string | null;
+  isActive: boolean;
   specs: ProductSpec[];
   features: string[];
   generalImages: AdminProductImageRecord[];
@@ -82,22 +84,7 @@ const DEFAULT_ICON_PATHS: Record<ProductType, string> = {
   Pants: "M5 2h14l-2 20h-4l-1-10-1 10H7L5 2z",
 };
 
-const PRODUCT_SELECT = `
-  id,
-  name,
-  subtitle,
-  category,
-  description,
-  price,
-  old_price,
-  tag,
-  tag_variant,
-  rating,
-  review_count,
-  stock_count,
-  featured,
-  sort_order,
-  created_at,
+const PRODUCT_RELATIONS = `
   colors:product_colors (
     id,
     product_id,
@@ -138,6 +125,20 @@ const PRODUCT_SELECT = `
     image_url,
     position
   )
+`;
+
+/** Select without new columns — fallback if migration hasn't run yet */
+const PRODUCT_SELECT_BASE = `
+  id, name, subtitle, category, description, price, old_price, tag, tag_variant,
+  rating, review_count, stock_count, featured, sort_order, created_at,
+  ${PRODUCT_RELATIONS}
+`;
+
+/** Select including new columns added by the categories migration */
+const PRODUCT_SELECT = `
+  id, name, subtitle, category, description, price, old_price, tag, tag_variant,
+  rating, review_count, stock_count, featured, sort_order, slug, is_active, created_at,
+  ${PRODUCT_RELATIONS}
 `;
 
 function sortByPosition<T extends { position: number }>(
@@ -216,6 +217,8 @@ function mapAdminProduct(row: ProductQueryRow): AdminProductRecord {
     stockCount: row.stock_count,
     featured: row.featured,
     sortOrder: row.sort_order,
+    slug: (row as unknown as { slug: string | null }).slug ?? null,
+    isActive: (row as unknown as { is_active: boolean }).is_active ?? true,
     specs: sortByPosition(row.specs).map((spec) => ({
       label: spec.label,
       value: spec.value,
@@ -350,6 +353,8 @@ function buildPayloadFromRecord(record: AdminProductRecord): AdminProductPayload
     rating: record.rating,
     reviewCount: record.reviewCount,
     featured: record.featured,
+    isActive: record.isActive,
+    slug: record.slug ?? null,
     sortOrder: record.sortOrder,
     specsText: record.specs.map((spec) => `${spec.label}|${spec.value}`).join("\n"),
     featuresText: record.features.join("\n"),
@@ -373,17 +378,30 @@ async function getAdminProductById(
   supabase: AdminSupabaseClient,
   productId: number,
 ) {
-  const { data, error } = await supabase
+  const result = await supabase
     .from("products")
     .select(PRODUCT_SELECT)
     .eq("id", productId)
     .maybeSingle();
 
-  if (error) {
-    throw new Error(error.message);
+  let rawData: unknown = result.data;
+  let queryError = result.error;
+
+  if (queryError && isMissingColumnError(queryError.message)) {
+    const fallback = await supabase
+      .from("products")
+      .select(PRODUCT_SELECT_BASE)
+      .eq("id", productId)
+      .maybeSingle();
+    rawData = fallback.data;
+    queryError = fallback.error;
   }
 
-  return data ? mapAdminProduct(data as unknown as ProductQueryRow) : null;
+  if (queryError) {
+    throw new Error(queryError.message);
+  }
+
+  return rawData ? mapAdminProduct(rawData as ProductQueryRow) : null;
 }
 
 async function writeProductGraph(
@@ -402,7 +420,7 @@ async function writeProductGraph(
     0,
   );
 
-  const productMutation = {
+  const productMutation: Database["public"]["Tables"]["products"]["Insert"] = {
     name: payload.name,
     subtitle: payload.subtitle,
     category: payload.category,
@@ -416,6 +434,8 @@ async function writeProductGraph(
     stock_count: totalStockCount,
     featured: payload.featured,
     sort_order: payload.sortOrder,
+    is_active: payload.isActive ?? true,
+    slug: payload.slug ?? null,
   };
 
   let baseProductId = productId;
@@ -596,18 +616,42 @@ async function upsertAdminProductWithFallback(
   }
 }
 
+function isMissingColumnError(message: string) {
+  return message.includes("does not exist") && (
+    message.includes("products.slug") ||
+    message.includes("products.is_active") ||
+    message.includes("column \"slug\"") ||
+    message.includes("column \"is_active\"")
+  );
+}
+
 export async function getAdminProducts(supabase: AdminSupabaseClient) {
-  const { data, error } = await supabase
+  const result = await supabase
     .from("products")
     .select(PRODUCT_SELECT)
     .order("sort_order", { ascending: true })
     .order("id", { ascending: true });
 
-  if (error) {
-    throw new Error(error.message);
+  let rawData: unknown = result.data;
+  let queryError = result.error;
+
+  if (queryError && isMissingColumnError(queryError.message)) {
+    // Migration hasn't been run yet — fall back to base select
+    console.warn("[Admin Products]: slug/is_active columns missing, using base select. Run migration 202604100001.");
+    const fallback = await supabase
+      .from("products")
+      .select(PRODUCT_SELECT_BASE)
+      .order("sort_order", { ascending: true })
+      .order("id", { ascending: true });
+    rawData = fallback.data;
+    queryError = fallback.error;
   }
 
-  return ((data as unknown as ProductQueryRow[] | null) ?? []).map(mapAdminProduct);
+  if (queryError) {
+    throw new Error(queryError.message);
+  }
+
+  return ((rawData as ProductQueryRow[] | null) ?? []).map(mapAdminProduct);
 }
 
 export async function upsertAdminProduct(
@@ -668,6 +712,13 @@ export async function upsertAdminProduct(
   if (!data) {
     throw new Error("Failed to upsert product.");
   }
+
+  // Patch slug and is_active separately (RPC doesn't have these params yet)
+  const slugPatch: Record<string, unknown> = { is_active: payload.isActive ?? true };
+  if (payload.slug) {
+    slugPatch.slug = payload.slug;
+  }
+  await supabase.from("products").update(slugPatch).eq("id", data);
 
   return data;
 }

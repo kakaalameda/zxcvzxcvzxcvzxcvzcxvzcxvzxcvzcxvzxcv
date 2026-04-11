@@ -3,7 +3,7 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import type { ColumnDef } from "@tanstack/react-table";
-import { Pencil, Plus, Trash2, Upload } from "lucide-react";
+import { Pencil, Plus, Search, Trash2, Upload } from "lucide-react";
 import { useMemo, useRef, useState, useTransition } from "react";
 import {
   type FieldErrors,
@@ -11,7 +11,9 @@ import {
   useFieldArray,
   useForm,
   useWatch,
+  useController,
 } from "react-hook-form";
+import { toSlug } from "@/lib/utils/slug";
 import { DataTable } from "@/components/admin/data-table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -68,6 +70,8 @@ function buildDefaultValues(product?: AdminProductRecord): AdminProductFormValue
     rating: product?.rating ?? 4.8,
     reviewCount: product?.reviewCount ?? 0,
     featured: product?.featured ?? false,
+    isActive: product?.isActive ?? true,
+    slug: product?.slug ?? null,
     sortOrder: product?.sortOrder ?? 0,
     specsText:
       product?.specs.map((spec) => `${spec.label}|${spec.value}`).join("\n") ??
@@ -219,7 +223,7 @@ function UploadedImagesField({
                 />
               </div>
               <div className="space-y-1">
-                <Label htmlFor={`${namePrefix}-${index}-assigned-color`}>Gan mau</Label>
+                <Label htmlFor={`${namePrefix}-${index}-assigned-color`}>Gán màu</Label>
                 <select
                   id={`${namePrefix}-${index}-assigned-color`}
                   className="flex h-9 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm"
@@ -233,7 +237,7 @@ function UploadedImagesField({
                   }
                 >
                   <option value="" className="bg-black text-white">
-                    General / Khong gan mau
+                    Chung / Không gán màu
                   </option>
                   {currentColorNames.map((colorName) => (
                     <option
@@ -253,7 +257,7 @@ function UploadedImagesField({
                   variant="ghost"
                   onClick={() => onRemove(index)}
                 >
-                  Remove
+                  Xoá
                 </Button>
               </div>
             </div>
@@ -261,7 +265,7 @@ function UploadedImagesField({
         </div>
       ) : (
         <div className="rounded-2xl border border-dashed border-white/10 px-4 py-6 text-sm text-white/45">
-          Chua co anh nao trong muc nay.
+          Chưa có ảnh nào trong mục này.
         </div>
       )}
 
@@ -323,10 +327,10 @@ function ColorVariantCard({
       <div className="flex items-center justify-between gap-3">
         <div>
           <p className="text-xs uppercase tracking-[0.3em] text-gold-500">
-            Bien the
+            Biến thể
           </p>
           <h3 className="mt-2 font-heading text-lg uppercase tracking-[0.1em] text-white">
-            Mau {variantIndex + 1}
+            Màu {variantIndex + 1}
           </h3>
         </div>
         <Button
@@ -336,13 +340,13 @@ function ColorVariantCard({
           onClick={() => onRemoveVariant(variantIndex)}
         >
           <Trash2 className="size-4" />
-          Xoa mau
+          Xoá màu
         </Button>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
         <div className="space-y-2">
-          <Label htmlFor={`variant-color-${variantIndex}`}>Mau</Label>
+          <Label htmlFor={`variant-color-${variantIndex}`}>Màu sắc</Label>
           <select
             id={`variant-color-${variantIndex}`}
             className="flex h-9 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm"
@@ -375,7 +379,7 @@ function ColorVariantCard({
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor={`variant-stock-${variantIndex}`}>Ton kho theo mau</Label>
+          <Label htmlFor={`variant-stock-${variantIndex}`}>Tồn kho theo màu</Label>
           <Input
             id={`variant-stock-${variantIndex}`}
             type="number"
@@ -389,7 +393,7 @@ function ColorVariantCard({
       </div>
 
       <div className="space-y-3">
-        <Label>Size kha dung cho mau nay</Label>
+        <Label>Size khả dụng cho màu này</Label>
         <div className="flex flex-wrap gap-3">
           {PRODUCT_SIZE_OPTIONS.map((size) => (
             <label
@@ -416,8 +420,8 @@ function ColorVariantCard({
       </div>
 
       <UploadedImagesField
-        title="Anh rieng cho mau nay"
-        description="Moi anh co dropdown de giu general hoac gan sang mot mau khac."
+        title="Ảnh riêng cho màu này"
+        description="Mỗi ảnh có dropdown để giữ chung hoặc gán sang màu khác."
         namePrefix={`colorVariants.${variantIndex}.images`}
         fields={imageFields.fields}
         form={form}
@@ -437,6 +441,64 @@ function ColorVariantCard({
   );
 }
 
+/** Slug field that auto-generates from the product name, but lets admin override */
+function SlugField({ form }: { form: AdminProductForm }) {
+  const { field, fieldState } = useController({ control: form.control, name: "slug" });
+  const watchedName = useWatch({ control: form.control, name: "name" });
+  // If editing an existing product that already has a slug, mark as touched so we don't overwrite
+  const [touched, setTouched] = useState(() => Boolean(form.getValues("slug")));
+
+  // Auto-fill slug from name if user hasn't manually edited the slug yet
+  const prevAuto = useRef<string>("");
+  useMemo(() => {
+    if (touched) return;
+    const auto = watchedName ? toSlug(watchedName) : "";
+    if (auto !== prevAuto.current) {
+      prevAuto.current = auto;
+      form.setValue("slug", auto || null, { shouldDirty: false });
+    }
+  }, [watchedName, touched, form]);
+
+  return (
+    <div className="space-y-2">
+      <Label htmlFor="product-slug">Slug URL</Label>
+      <div className="relative">
+        <Input
+          id="product-slug"
+          placeholder="tu-dong-tao-tu-ten"
+          value={(field.value as string | null) ?? ""}
+          onChange={(e) => {
+            setTouched(true);
+            field.onChange(e.target.value || null);
+          }}
+          onBlur={field.onBlur}
+        />
+        {!touched && watchedName && (
+          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[0.6rem] text-gold-500/60 uppercase tracking-widest pointer-events-none">
+            tự động
+          </span>
+        )}
+      </div>
+      <p className="text-xs text-white/40">Tự tạo từ tên sản phẩm. Chỉnh nếu cần URL riêng.</p>
+      {fieldState.error && (
+        <p className="text-xs text-red-400">{fieldState.error.message}</p>
+      )}
+    </div>
+  );
+}
+
+type FilterStatus = "all" | "active" | "inactive" | "out_of_stock";
+
+function getStatusBadge(product: AdminProductRecord) {
+  if (!product.isActive) {
+    return { label: "Tạm ẩn", className: "bg-white/5 text-white/50" };
+  }
+  if (product.stockCount === 0) {
+    return { label: "Hết hàng", className: "bg-red-500/15 text-red-300" };
+  }
+  return { label: "Đang bán", className: "bg-emerald-500/15 text-emerald-300" };
+}
+
 export function ProductsPage({
   initialProducts,
 }: {
@@ -444,9 +506,47 @@ export function ProductsPage({
 }) {
   const [products, setProducts] = useState(initialProducts);
   const [editingProduct, setEditingProduct] = useState<AdminProductRecord | null>(null);
+  const [formOpen, setFormOpen] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filterCategory, setFilterCategory] = useState<string>("all");
+  const [filterStatus, setFilterStatus] = useState<FilterStatus>("all");
+
+  const filteredProducts = useMemo(() => {
+    return products.filter((product) => {
+      const q = searchQuery.toLowerCase().trim();
+      if (q && !product.name.toLowerCase().includes(q) && !product.subtitle.toLowerCase().includes(q)) {
+        return false;
+      }
+      if (filterCategory !== "all" && product.category !== filterCategory) {
+        return false;
+      }
+      if (filterStatus === "active" && (!product.isActive || product.stockCount === 0)) {
+        return false;
+      }
+      if (filterStatus === "inactive" && product.isActive) {
+        return false;
+      }
+      if (filterStatus === "out_of_stock" && product.stockCount > 0) {
+        return false;
+      }
+      return true;
+    });
+  }, [products, searchQuery, filterCategory, filterStatus]);
+
+  const openForm = (product: AdminProductRecord | null) => {
+    setEditingProduct(product);
+    form.reset(buildDefaultValues(product ?? undefined));
+    setError(null);
+    setMessage(null);
+    setFormOpen(true);
+  };
+
+  const closeForm = () => {
+    setFormOpen(false);
+  };
 
   const form = useForm<AdminProductFormValues, unknown, AdminProductPayload>({
     resolver: zodResolver(adminProductSchema),
@@ -481,15 +581,39 @@ export function ProductsPage({
   const columns = useMemo<ColumnDef<AdminProductRecord>[]>(
     () => [
       {
-        accessorKey: "name",
-        header: "Product",
+        id: "thumbnail",
+        header: "",
         cell: ({ row }) => {
           const product = row.original;
+          const firstImg =
+            product.generalImages[0]?.url ??
+            product.colorVariants[0]?.images[0]?.url;
+          return firstImg ? (
+            <div className="w-10 h-10 flex-shrink-0 overflow-hidden rounded-lg border border-white/10 bg-black">
+              <img src={firstImg} alt={product.name} className="w-full h-full object-cover" />
+            </div>
+          ) : (
+            <div className="w-10 h-10 flex-shrink-0 rounded-lg border border-dashed border-white/15 bg-white/[0.03]" />
+          );
+        },
+      },
+      {
+        accessorKey: "name",
+        header: "Sản phẩm",
+        cell: ({ row }) => {
+          const product = row.original;
+          const status = getStatusBadge(product);
           return (
             <div>
-              <p className="font-medium text-foreground">{product.name}</p>
-              <p className="text-xs text-muted-foreground">
+              <div className="flex items-center gap-2 flex-wrap">
+                <p className="font-medium text-foreground">{product.name}</p>
+                <span className={cn("inline-flex rounded-full px-2 py-0.5 text-[0.65rem] font-medium", status.className)}>
+                  {status.label}
+                </span>
+              </div>
+              <p className="text-xs text-muted-foreground mt-0.5">
                 {product.subtitle} · {product.category}
+                {product.slug ? <span className="text-white/30"> · /{product.slug}</span> : null}
               </p>
             </div>
           );
@@ -497,7 +621,7 @@ export function ProductsPage({
       },
       {
         accessorKey: "price",
-        header: "Price",
+        header: "Giá",
         cell: ({ row }) => (
           <div>
             <p>{formatPrice(row.original.price)}</p>
@@ -511,7 +635,7 @@ export function ProductsPage({
       },
       {
         accessorKey: "stockCount",
-        header: "Stock",
+        header: "Tồn kho",
         cell: ({ row }) => (
           <span className="text-sm text-muted-foreground">
             {row.original.stockCount}
@@ -520,7 +644,7 @@ export function ProductsPage({
       },
       {
         accessorKey: "featured",
-        header: "Featured",
+        header: "Nổi bật",
         cell: ({ row }) => (
           <span
             className={cn(
@@ -530,22 +654,32 @@ export function ProductsPage({
                 : "bg-white/5 text-white/60",
             )}
           >
-            {row.original.featured ? "Yes" : "No"}
+            {row.original.featured ? "Có" : "Không"}
           </span>
         ),
       },
       {
         accessorKey: "colorVariants",
-        header: "Colors",
+        header: "Màu sắc",
         cell: ({ row }) => (
-          <span className="text-sm text-muted-foreground">
-            {row.original.colorVariants.map((variant) => variant.colorName).join(", ")}
-          </span>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {row.original.colorVariants.map((variant) => {
+              const color = PREDEFINED_PRODUCT_COLORS.find((c) => c.name === variant.colorName);
+              return (
+                <div
+                  key={variant.colorName}
+                  title={variant.colorName}
+                  className="w-4 h-4 rounded-full border border-white/25 flex-shrink-0"
+                  style={{ background: color?.hex ?? "#888" }}
+                />
+              );
+            })}
+          </div>
         ),
       },
       {
         id: "actions",
-        header: "Actions",
+        header: "Thao tác",
         cell: ({ row }) => {
           const product = row.original;
 
@@ -555,22 +689,18 @@ export function ProductsPage({
                 type="button"
                 size="sm"
                 variant="outline"
-                onClick={() => {
-                  setEditingProduct(product);
-                  form.reset(buildDefaultValues(product));
-                  setError(null);
-                  setMessage(null);
-                }}
+                onClick={() => openForm(product)}
               >
                 <Pencil className="size-4" />
-                Edit
+                Sửa
               </Button>
+
               <Button
                 type="button"
                 size="sm"
                 variant="destructive"
                 onClick={() => {
-                  const confirmed = window.confirm(`Delete ${product.name}?`);
+                  const confirmed = window.confirm(`Xác nhận xoá sản phẩm "${product.name}"?`);
                   if (!confirmed) {
                     return;
                   }
@@ -587,7 +717,7 @@ export function ProductsPage({
                       | null;
 
                     if (!response.ok) {
-                      setError(result?.error ?? "Failed to delete product.");
+                      setError(result?.error ?? "Không thể xoá sản phẩm.");
                       return;
                     }
 
@@ -598,12 +728,12 @@ export function ProductsPage({
                       setEditingProduct(null);
                       form.reset(buildDefaultValues());
                     }
-                    setMessage("Product deleted.");
+                    setMessage("Đã xoá sản phẩm.");
                   });
                 }}
               >
                 <Trash2 className="size-4" />
-                Delete
+                Xoá
               </Button>
             </div>
           );
@@ -690,205 +820,223 @@ export function ProductsPage({
         | null;
 
       if (!response.ok) {
-        setError(result?.error ?? "Failed to save product.");
+        setError(result?.error ?? "Không thể lưu sản phẩm.");
         return;
       }
 
-      setMessage(editingProduct ? "Product updated." : "Product created.");
+      setMessage(editingProduct ? "Đã cập nhật sản phẩm." : "Đã tạo sản phẩm.");
       window.location.reload();
     });
   });
 
   return (
     <div className="min-h-screen bg-[#050505] px-4 py-6 text-white md:px-8">
-      <div className="mx-auto flex max-w-7xl flex-col gap-6 xl:grid xl:grid-cols-[1.7fr_1fr]">
-        <section className="space-y-4">
-          <div className="rounded-3xl border border-white/10 bg-black/40 p-6">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-              <div>
-                <p className="text-xs uppercase tracking-[0.35em] text-gold-500">
-                  Admin
-                </p>
-                <h1 className="mt-3 font-display text-4xl tracking-wide">
-                  Products
-                </h1>
-                <p className="mt-2 text-sm text-white/55">
-                  Quan ly san pham, bien the mau va anh theo mau trong mot form.
-                </p>
-              </div>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => {
-                  setEditingProduct(null);
-                  form.reset(buildDefaultValues());
-                  setError(null);
-                  setMessage(null);
-                }}
-              >
-                <Plus className="size-4" />
-                New product
-              </Button>
+      {/* ── Main content (full width) ── */}
+      <div className="mx-auto max-w-7xl space-y-4">
+        <div className="rounded-3xl border border-white/10 bg-black/40 p-6">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="text-xs uppercase tracking-[0.35em] text-gold-500">Admin</p>
+              <h1 className="mt-3 font-display text-4xl tracking-wide">Sản Phẩm</h1>
+              <p className="mt-2 text-sm text-white/55">
+                Quản lý sản phẩm, biến thể màu và ảnh theo màu.
+              </p>
             </div>
+            <Button type="button" variant="outline" onClick={() => openForm(null)}>
+              <Plus className="size-4" />
+              Thêm sản phẩm
+            </Button>
+          </div>
+        </div>
+
+        {/* ── Search + filter bar ── */}
+        <div className="flex flex-col sm:flex-row gap-3">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-white/30 pointer-events-none" />
+            <input
+              type="text"
+              placeholder="Tìm theo tên sản phẩm..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full h-9 rounded-lg border border-white/10 bg-white/[0.04] pl-9 pr-3 text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-gold-500/50"
+            />
+          </div>
+          <select
+            value={filterCategory}
+            onChange={(e) => setFilterCategory(e.target.value)}
+            className="h-9 rounded-lg border border-white/10 bg-[#0c0c0c] px-3 text-sm text-white/70 focus:outline-none focus:border-gold-500/50"
+          >
+            <option value="all">Tất cả danh mục</option>
+            <option value="Tee">Tee</option>
+            <option value="Hoodie">Hoodie</option>
+            <option value="Pants">Pants</option>
+          </select>
+          <select
+            value={filterStatus}
+            onChange={(e) => setFilterStatus(e.target.value as FilterStatus)}
+            className="h-9 rounded-lg border border-white/10 bg-[#0c0c0c] px-3 text-sm text-white/70 focus:outline-none focus:border-gold-500/50"
+          >
+            <option value="all">Tất cả trạng thái</option>
+            <option value="active">Đang bán</option>
+            <option value="inactive">Tạm ẩn</option>
+            <option value="out_of_stock">Hết hàng</option>
+          </select>
+        </div>
+
+        <DataTable
+          columns={columns}
+          data={filteredProducts}
+          emptyMessage={
+            searchQuery || filterCategory !== "all" || filterStatus !== "all"
+              ? "Không tìm thấy sản phẩm phù hợp."
+              : "Chưa có sản phẩm nào."
+          }
+        />
+      </div>
+
+      {/* ── Overlay ── */}
+      {formOpen ? (
+        <div
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40"
+          onClick={closeForm}
+        />
+      ) : null}
+
+      {/* ── Slide-over drawer ── */}
+      <div
+        className={[
+          "fixed right-0 top-0 h-full w-full max-w-[560px] bg-[#0c0c0c] border-l border-white/10 z-50 overflow-y-auto",
+          "transition-transform duration-300 ease-[cubic-bezier(0.25,0.46,0.45,0.94)]",
+          formOpen ? "translate-x-0" : "translate-x-full",
+        ].join(" ")}
+      >
+        <div className="p-6 space-y-6">
+
+          {/* Drawer header */}
+          <div className="flex items-start justify-between gap-3 pb-4 border-b border-white/10">
+            <div>
+              <p className="text-xs uppercase tracking-[0.35em] text-gold-500">
+                {editingProduct ? "Chỉnh sửa" : "Thêm mới"}
+              </p>
+              <h2 className="mt-2 font-display text-2xl tracking-wide leading-tight">
+                {editingProduct ? editingProduct.name : "Sản phẩm mới"}
+              </h2>
+            </div>
+            <button
+              type="button"
+              onClick={closeForm}
+              className="mt-1 flex-shrink-0 w-8 h-8 flex items-center justify-center text-white/40 hover:text-white hover:bg-white/8 border border-transparent hover:border-white/15 transition-all cursor-pointer bg-transparent rounded-sm"
+              aria-label="Đóng"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-4 h-4">
+                <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
           </div>
 
-          <DataTable
-            columns={columns}
-            data={products}
-            emptyMessage="No products found."
-          />
-        </section>
-
-        <section className="rounded-3xl border border-white/10 bg-black/50 p-6">
-          <div className="mb-6">
-            <p className="text-xs uppercase tracking-[0.35em] text-gold-500">
-              {editingProduct ? "Edit" : "Create"}
-            </p>
-            <h2 className="mt-3 font-display text-3xl tracking-wide">
-              {editingProduct ? editingProduct.name : "Product form"}
-            </h2>
-          </div>
-
-          <form className="space-y-6" onSubmit={onSubmit}>
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="product-name">Name</Label>
+          {/* Form */}
+          <form className="space-y-5" onSubmit={onSubmit}>
+            <div className="grid gap-4 grid-cols-2">
+              <div className="space-y-2 col-span-2">
+                <Label htmlFor="product-name">Tên sản phẩm</Label>
                 <Input id="product-name" {...form.register("name")} />
-                <p className="text-xs text-red-400">
-                  {form.formState.errors.name?.message}
-                </p>
+                <p className="text-xs text-red-400">{form.formState.errors.name?.message}</p>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="product-subtitle">Subtitle</Label>
+              <div className="space-y-2 col-span-2">
+                <Label htmlFor="product-subtitle">Mô tả ngắn</Label>
                 <Input id="product-subtitle" {...form.register("subtitle")} />
-                <p className="text-xs text-red-400">
-                  {form.formState.errors.subtitle?.message}
-                </p>
+                <p className="text-xs text-red-400">{form.formState.errors.subtitle?.message}</p>
               </div>
             </div>
 
-            <div className="grid gap-4 md:grid-cols-3">
+            <div className="grid gap-4 grid-cols-3">
               <div className="space-y-2">
-                <Label htmlFor="product-category">Category</Label>
+                <Label htmlFor="product-category">Danh mục</Label>
                 <select
                   id="product-category"
                   className="flex h-9 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm"
                   {...form.register("category")}
                 >
                   {PRODUCT_TYPES.map((type) => (
-                    <option key={type} value={type} className="bg-black text-white">
-                      {type}
-                    </option>
+                    <option key={type} value={type} className="bg-black text-white">{type}</option>
                   ))}
                 </select>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="product-price">Price</Label>
+                <Label htmlFor="product-price">Giá (đ)</Label>
                 <Input id="product-price" type="number" min={0} {...form.register("price")} />
                 <p className="text-xs text-red-400">{form.formState.errors.price?.message}</p>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="product-old-price">Old price</Label>
-                <Input
-                  id="product-old-price"
-                  type="number"
-                  min={0}
-                  {...form.register("oldPrice")}
-                />
+                <Label htmlFor="product-old-price">Giá gốc (đ)</Label>
+                <Input id="product-old-price" type="number" min={0} {...form.register("oldPrice")} />
               </div>
             </div>
 
-            <div className="grid gap-4 md:grid-cols-3">
+            <div className="grid gap-4 grid-cols-2">
               <div className="space-y-2">
-                <Label htmlFor="product-tag">Tag</Label>
+                <Label htmlFor="product-tag">Nhãn</Label>
                 <Input id="product-tag" {...form.register("tag")} />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="product-tag-variant">Tag variant</Label>
+                <Label htmlFor="product-tag-variant">Kiểu nhãn</Label>
                 <select
                   id="product-tag-variant"
                   className="flex h-9 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm"
                   {...form.register("tagVariant")}
                 >
-                  <option value="" className="bg-black text-white">
-                    None
-                  </option>
+                  <option value="" className="bg-black text-white">Không có</option>
                   {TAG_VARIANTS.map((variant) => (
-                    <option key={variant} value={variant} className="bg-black text-white">
-                      {variant}
-                    </option>
+                    <option key={variant} value={variant} className="bg-black text-white">{variant}</option>
                   ))}
                 </select>
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="product-rating">Rating</Label>
-                  <Input
-                    id="product-rating"
-                    type="number"
-                    min={0}
-                    max={5}
-                    step="0.1"
-                    {...form.register("rating")}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="product-review-count">Reviews</Label>
-                  <Input
-                    id="product-review-count"
-                    type="number"
-                    min={0}
-                    {...form.register("reviewCount")}
-                  />
-                </div>
+            </div>
+
+            <div className="grid gap-4 grid-cols-3">
+              <div className="space-y-2">
+                <Label htmlFor="product-rating">Điểm đánh giá</Label>
+                <Input id="product-rating" type="number" min={0} max={5} step="0.1" {...form.register("rating")} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="product-review-count">Số đánh giá</Label>
+                <Input id="product-review-count" type="number" min={0} {...form.register("reviewCount")} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="product-sort-order">Thứ tự</Label>
+                <Input id="product-sort-order" type="number" min={0} {...form.register("sortOrder")} />
               </div>
             </div>
 
-            <div className="grid gap-4 md:grid-cols-3">
-              <div className="space-y-2">
-                <Label htmlFor="product-sort-order">Sort order</Label>
-                <Input
-                  id="product-sort-order"
-                  type="number"
-                  min={0}
-                  {...form.register("sortOrder")}
-                />
-              </div>
-              <div className="md:col-span-2">
-                <label className="mt-7 flex items-center gap-3 text-sm text-white/70">
-                  <input type="checkbox" {...form.register("featured")} />
-                  Featured product
-                </label>
-              </div>
+            <div className="flex flex-wrap gap-5">
+              <label className="flex items-center gap-3 text-sm text-white/70 cursor-pointer">
+                <input type="checkbox" {...form.register("featured")} />
+                Sản phẩm nổi bật
+              </label>
+              <label className="flex items-center gap-3 text-sm text-white/70 cursor-pointer">
+                <input type="checkbox" {...form.register("isActive")} />
+                Đang bán (hiển thị trên web)
+              </label>
             </div>
+
+            <SlugField key={editingProduct?.id ?? "new"} form={form} />
 
             <div className="space-y-2">
-              <Label htmlFor="product-description">Description</Label>
-              <Textarea
-                id="product-description"
-                rows={5}
-                {...form.register("description")}
-              />
-              <p className="text-xs text-red-400">
-                {form.formState.errors.description?.message}
-              </p>
+              <Label htmlFor="product-description">Mô tả chi tiết</Label>
+              <Textarea id="product-description" rows={4} {...form.register("description")} />
+              <p className="text-xs text-red-400">{form.formState.errors.description?.message}</p>
             </div>
 
             <UploadedImagesField
-              title="Anh chung cua san pham"
-              description="Co the de general hoac gan truc tiep tung anh cho mot mau da tao."
+              title="Ảnh chung của sản phẩm"
+              description="Có thể để chung hoặc gán trực tiếp từng ảnh cho một màu đã tạo."
               namePrefix="generalImages"
               fields={generalImageFields.fields}
               form={form}
               currentColorNames={currentColorNames}
               defaultAssignedColorName={null}
               onAppendImages={(urls) => {
-                generalImageFields.append(
-                  urls.map((url) => ({
-                    url,
-                    assignedColorName: null,
-                  })),
-                );
+                generalImageFields.append(urls.map((url) => ({ url, assignedColorName: null })));
               }}
               onRemove={generalImageFields.remove}
             />
@@ -899,9 +1047,9 @@ export function ProductsPage({
             <div className="space-y-4">
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <Label className="text-base">Color variants</Label>
+                  <Label className="text-base">Biến thể màu</Label>
                   <p className="mt-1 text-xs text-white/45">
-                    Chon mau co san, ton kho theo mau, size theo mau va anh theo mau.
+                    Chọn màu, tồn kho, size và ảnh theo từng màu.
                   </p>
                 </div>
                 <Button
@@ -914,14 +1062,12 @@ export function ProductsPage({
                   }
                 >
                   <Plus className="size-4" />
-                  Add color
+                  Thêm màu
                 </Button>
               </div>
-
               <p className="text-xs text-red-400">
                 {form.formState.errors.colorVariants?.message as string | undefined}
               </p>
-
               <div className="space-y-4">
                 {colorVariantFields.fields.map((field, index) => (
                   <ColorVariantCard
@@ -938,62 +1084,35 @@ export function ProductsPage({
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="product-specs">Specs</Label>
-              <Textarea
-                id="product-specs"
-                rows={4}
-                placeholder="Material|100% Cotton"
-                {...form.register("specsText")}
-              />
-              <p className="text-xs text-white/45">One line per spec: Label|Value</p>
+              <Label htmlFor="product-specs">Thông số kỹ thuật</Label>
+              <Textarea id="product-specs" rows={4} placeholder="Material|100% Cotton" {...form.register("specsText")} />
+              <p className="text-xs text-white/45">Mỗi dòng một thông số: Tên|Giá trị</p>
               <p className="text-xs text-red-400">{form.formState.errors.specsText?.message}</p>
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="product-features">Features</Label>
-              <Textarea
-                id="product-features"
-                rows={4}
-                placeholder="Boxy fit"
-                {...form.register("featuresText")}
-              />
+              <Label htmlFor="product-features">Đặc điểm nổi bật</Label>
+              <Textarea id="product-features" rows={3} placeholder="Boxy fit" {...form.register("featuresText")} />
             </div>
 
             {error ? (
-              <p className="rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-300">
-                {error}
-              </p>
+              <p className="rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-300">{error}</p>
             ) : null}
 
             {message ? (
-              <p className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300">
-                {message}
-              </p>
+              <p className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300">{message}</p>
             ) : null}
 
-            <div className="flex gap-3">
-              <Button
-                type="submit"
-                className="bg-gold-500 text-black hover:bg-gold-400"
-                disabled={isPending}
-              >
-                {isPending ? "Saving..." : editingProduct ? "Update product" : "Create product"}
+            <div className="flex gap-3 pb-2">
+              <Button type="submit" className="bg-gold-500 text-black hover:bg-gold-400" disabled={isPending}>
+                {isPending ? "Đang lưu..." : editingProduct ? "Cập nhật" : "Tạo sản phẩm"}
               </Button>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => {
-                  setEditingProduct(null);
-                  form.reset(buildDefaultValues());
-                  setError(null);
-                  setMessage(null);
-                }}
-              >
-                Reset
+              <Button type="button" variant="outline" onClick={closeForm}>
+                Đặt lại
               </Button>
             </div>
           </form>
-        </section>
+        </div>
       </div>
     </div>
   );

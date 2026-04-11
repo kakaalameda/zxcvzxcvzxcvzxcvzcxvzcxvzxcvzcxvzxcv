@@ -189,6 +189,48 @@ export interface Database {
         Update: Partial<Database["public"]["Tables"]["product_specs"]["Insert"]>;
         Relationships: [];
       };
+      categories: {
+        Row: {
+          id: number;
+          slug: string;
+          name: string;
+          parent_id: number | null;
+          sort_order: number;
+          visible_frontend: boolean;
+          meta_title: string | null;
+          meta_description: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: number;
+          slug: string;
+          name: string;
+          parent_id?: number | null;
+          sort_order?: number;
+          visible_frontend?: boolean;
+          meta_title?: string | null;
+          meta_description?: string | null;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["categories"]["Insert"]>;
+        Relationships: [];
+      };
+      product_attributes: {
+        Row: {
+          id: number;
+          product_id: number;
+          key: string;
+          value: string;
+        };
+        Insert: {
+          id?: number;
+          product_id: number;
+          key: string;
+          value: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["product_attributes"]["Insert"]>;
+        Relationships: [];
+      };
       products: {
         Row: {
           id: number;
@@ -205,6 +247,9 @@ export interface Database {
           stock_count: number;
           featured: boolean;
           sort_order: number;
+          slug: string | null;
+          category_id: number | null;
+          is_active: boolean;
           created_at: string;
         };
         Insert: {
@@ -222,6 +267,9 @@ export interface Database {
           stock_count?: number;
           featured?: boolean;
           sort_order?: number;
+          slug?: string | null;
+          category_id?: number | null;
+          is_active?: boolean;
           created_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["products"]["Insert"]>;

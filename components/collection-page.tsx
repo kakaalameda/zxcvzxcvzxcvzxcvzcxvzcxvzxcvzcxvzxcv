@@ -380,29 +380,67 @@ function CollectionProductCard({ product }: { product: Product }) {
         </div>
       ) : null}
 
-      <div className="absolute bottom-0 left-0 right-0 p-4 transition-transform duration-300 group-hover:-translate-y-1.5 z-20">
-        <p className="font-heading text-base font-bold tracking-wide uppercase leading-tight mb-0.5">{product.name}</p>
-        <p className="text-white/40 text-[0.7rem] font-body mb-2.5">{product.subtitle}</p>
-        <div className="flex items-center justify-between">
-          <div className="flex items-baseline gap-1.5">
-            <span className="font-display text-2xl text-gold-500">{formatCompactPrice(product.price)}</span>
-            {product.oldPrice ? <span className="font-heading text-xs text-white/30 line-through">{formatCompactPrice(product.oldPrice)}</span> : null}
+      {/*
+       * ── Bottom section ──────────────────────────────────────────────────────
+       * Desktop: size bar phải là con trực tiếp của CARD (absolute bottom-0),
+       * không phải con của info-wrapper — nếu không sẽ đè lên nút "+".
+       * Product info trượt lên đủ 44px (= chiều cao size bar) khi hover.
+       *
+       * Mobile: size bar nằm trong flex-col dưới product info → không chồng nhau.
+       *
+       * pointer-events-none trên wrapper text → click tên/giá fall-through đến
+       * Link (z-10) bên dưới → navigate đúng trang sản phẩm.
+       */}
+
+      {/* ── Product info + mobile size bar ── */}
+      <div className="absolute bottom-0 left-0 right-0 z-20 flex flex-col pointer-events-none">
+        <div className="px-3 pt-2.5 pb-2 md:p-4 transition-transform duration-300 md:group-hover:-translate-y-[44px]">
+          <p className="font-heading text-[0.72rem] md:text-sm font-bold tracking-wide uppercase leading-tight mb-0.5 line-clamp-2 md:line-clamp-none">{product.name}</p>
+          <p className="text-white/40 text-[0.62rem] md:text-[0.7rem] font-body mb-2">{product.subtitle}</p>
+          <div className="flex items-center justify-between">
+            <div className="flex items-baseline gap-1">
+              <span className="font-display text-lg md:text-2xl text-gold-500">{formatCompactPrice(product.price)}</span>
+              {product.oldPrice ? <span className="font-heading text-[0.65rem] md:text-xs text-white/30 line-through">{formatCompactPrice(product.oldPrice)}</span> : null}
+            </div>
+            <button
+              onClick={quickAdd}
+              aria-label={`Thêm ${product.name} vào giỏ`}
+              className={`pointer-events-auto w-9 h-9 flex items-center justify-center border-none cursor-pointer transition-all duration-300 ${added ? "bg-white text-brand-black" : "bg-gold-500 text-brand-black"} scale-100 md:scale-0 md:group-hover:scale-100`}
+            >
+              {added ? <DoneIcon /> : <PlusIcon />}
+            </button>
           </div>
-          <button
-            onClick={quickAdd}
-            aria-label={`Thêm ${product.name} vào giỏ`}
-            className={`w-9 h-9 flex items-center justify-center border-none cursor-pointer transition-all duration-300 relative z-20 ${added ? "bg-white text-brand-black" : "bg-gold-500 text-brand-black"} scale-100 md:scale-0 md:group-hover:scale-100`}
-          >
-            {added ? <DoneIcon /> : <PlusIcon />}
-          </button>
+        </div>
+
+        {/* Size bar — MOBILE ONLY: static trong flex-col, nằm dưới product info */}
+        <div className="md:hidden pointer-events-auto flex gap-1 bg-black/95 p-2">
+          {SIZES.map((size) => {
+            const available = availableSizes.includes(size);
+            const active = selectedSize === size;
+            return (
+              <button
+                key={size}
+                disabled={!available}
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  if (available) setSelectedSize(size);
+                }}
+                className={`flex-1 font-heading text-[0.72rem] font-bold tracking-wider uppercase py-1.5 border transition-all duration-150 ${!available ? "border-white/10 text-white/20 line-through cursor-not-allowed bg-transparent" : active ? "border-gold-500 bg-gold-500 text-brand-black cursor-pointer" : "border-white/30 text-white/70 hover:bg-gold-500 hover:border-gold-500 hover:text-brand-black cursor-pointer bg-transparent"}`}
+              >
+                {size}
+              </button>
+            );
+          })}
         </div>
       </div>
 
-      <div className="absolute bottom-0 left-0 right-0 flex gap-1 bg-black/95 p-2 z-20 transition-all duration-300 opacity-100 translate-y-0 md:opacity-0 md:translate-y-full md:group-hover:opacity-100 md:group-hover:translate-y-0">
+      {/* Size bar — DESKTOP ONLY: absolute trên CARD (không phải info wrapper),
+          slide lên từ dưới khi hover → nằm dưới product info đã trượt lên 44px */}
+      <div className="hidden md:flex absolute bottom-0 left-0 right-0 z-20 gap-1 bg-black/95 p-2 transition-all duration-300 opacity-0 translate-y-full group-hover:opacity-100 group-hover:translate-y-0 pointer-events-auto">
         {SIZES.map((size) => {
           const available = availableSizes.includes(size);
           const active = selectedSize === size;
-
           return (
             <button
               key={size}
@@ -410,9 +448,7 @@ function CollectionProductCard({ product }: { product: Product }) {
               onClick={(event) => {
                 event.preventDefault();
                 event.stopPropagation();
-                if (available) {
-                  setSelectedSize(size);
-                }
+                if (available) setSelectedSize(size);
               }}
               className={`flex-1 font-heading text-[0.72rem] font-bold tracking-wider uppercase py-1.5 border transition-all duration-150 ${!available ? "border-white/10 text-white/20 line-through cursor-not-allowed bg-transparent" : active ? "border-gold-500 bg-gold-500 text-brand-black cursor-pointer" : "border-white/30 text-white/70 hover:bg-gold-500 hover:border-gold-500 hover:text-brand-black cursor-pointer bg-transparent"}`}
             >

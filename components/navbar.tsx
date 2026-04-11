@@ -68,7 +68,7 @@ export function Navbar() {
           href="/collection"
           className="hidden md:inline-flex items-center gap-2 border border-white/15 text-white/60 font-heading text-[0.72rem] tracking-[0.14em] uppercase px-4 py-2 no-underline hover:border-gold-500/40 hover:text-gold-500 transition-all"
         >
-          Shop
+          Mua Sắm
         </Link>
         <button
           aria-label="Giỏ hàng"

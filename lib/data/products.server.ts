@@ -219,11 +219,25 @@ async function fetchProductsFromSupabase(): Promise<ProductCatalogRecord[]> {
     },
   });
 
-  const { data, error } = await supabase
+  // Try with is_active filter first (requires migration 202604100001)
+  let result = await supabase
     .from("products")
     .select(PRODUCT_SELECT)
+    .eq("is_active", true)
     .order("sort_order", { ascending: true })
     .order("id", { ascending: true });
+
+  // Fallback: if is_active column doesn't exist yet, fetch all
+  if (result.error && result.error.message.includes("does not exist")) {
+    console.warn("[Products Server]: is_active column missing, fetching all products.");
+    result = await supabase
+      .from("products")
+      .select(PRODUCT_SELECT)
+      .order("sort_order", { ascending: true })
+      .order("id", { ascending: true });
+  }
+
+  const { data, error } = result;
 
   if (error) {
     console.error("[Products Server]: Khong the tai san pham tu Supabase.", error);
@@ -260,6 +274,32 @@ export const getFeaturedProducts = cache(async (limit = 4): Promise<Product[]> =
 export const getProductById = cache(async (id: string): Promise<Product | undefined> => {
   const products = await getProducts();
   return products.find((product) => String(product.id) === id);
+});
+
+export const getProductBySlug = cache(async (productSlug: string): Promise<Product | undefined> => {
+  const env = getSupabasePublicEnv();
+  if (!env) {
+    return undefined;
+  }
+
+  const supabase = createServerClient<Database>(env.url, env.publishableKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+    global: { fetch: buildCachedFetch(["store:products"]) },
+    cookies: { getAll() { return []; }, setAll() {} },
+  });
+
+  const { data, error } = await supabase
+    .from("products")
+    .select(PRODUCT_SELECT)
+    .eq("slug", productSlug)
+    .eq("is_active", true)
+    .single();
+
+  if (error || !data) {
+    return undefined;
+  }
+
+  return mapProductRecord(data as unknown as ProductQueryRow).product;
 });
 
 export async function getRelatedProducts(
