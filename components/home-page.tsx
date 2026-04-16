@@ -48,7 +48,7 @@ function HeroSection({ heroProduct }: { heroProduct: Product }) {
             {eyebrow}
           </p>
 
-          <h1 className="mt-6 max-w-[9ch] font-editorial text-[clamp(3.1rem,5.8vw,5.15rem)] leading-[0.93] tracking-[-0.05em] text-[#171513]">
+          <h1 className="mt-6 max-w-[21ch] font-editorial text-[clamp(2.0rem,3.8vw,3.2rem)] leading-[0.93] tracking-[-0.05em] text-[#171513]">
             <span>{heroProduct.name}</span>
             <span className="mt-2 block italic text-[#7b746c]">{heroProduct.subtitle}</span>
           </h1>
