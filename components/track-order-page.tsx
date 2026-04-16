@@ -1,14 +1,13 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Search } from "lucide-react";
+import { PackageSearch, Search } from "lucide-react";
 import { useState, useTransition } from "react";
 import { useForm } from "react-hook-form";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { trackOrderLookupSchema, type TrackOrderLookupPayload } from "@/lib/validations/order";
-import { cn } from "@/lib/utils";
+import {
+  trackOrderLookupSchema,
+  type TrackOrderLookupPayload,
+} from "@/lib/validations/order";
 
 interface TrackOrderItem {
   id: string;
@@ -29,51 +28,53 @@ interface TrackOrderRecord {
 }
 
 function formatPrice(value: number) {
-  return `${Math.round(value).toLocaleString("vi-VN")}d`;
+  return `${Math.round(value).toLocaleString("vi-VN")}đ`;
 }
 
 function formatDate(value: string) {
   return new Date(value).toLocaleString("vi-VN");
 }
 
-function statusClass(status: TrackOrderRecord["status"]) {
-  switch (status) {
-    case "pending":
-      return "bg-amber-500/15 text-amber-300";
-    case "confirmed":
-      return "bg-sky-500/15 text-sky-300";
-    case "shipped":
-      return "bg-emerald-500/15 text-emerald-300";
-    case "cancelled":
-      return "bg-red-500/15 text-red-300";
-    default:
-      return "bg-white/5 text-white/60";
-  }
-}
+const STATUS_MAP: Record<
+  TrackOrderRecord["status"],
+  { label: string; className: string }
+> = {
+  pending: {
+    label: "Chờ xác nhận",
+    className: "bg-amber-50 text-amber-700 border-amber-200",
+  },
+  confirmed: {
+    label: "Đã xác nhận",
+    className: "bg-store-blue-soft text-store-blue border-[#cfd8ff]",
+  },
+  shipped: {
+    label: "Đang giao",
+    className: "bg-emerald-50 text-emerald-700 border-emerald-200",
+  },
+  cancelled: {
+    label: "Đã hủy",
+    className: "bg-rose-50 text-rose-700 border-rose-200",
+  },
+};
 
 export function TrackOrderPage() {
   const [orders, setOrders] = useState<TrackOrderRecord[]>([]);
   const [lookupError, setLookupError] = useState<string | null>(null);
   const [lookupMessage, setLookupMessage] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+
   const form = useForm<TrackOrderLookupPayload>({
     resolver: zodResolver(trackOrderLookupSchema),
-    defaultValues: {
-      orderNumber: "",
-      phone: "",
-    },
+    defaultValues: { orderNumber: "", phone: "" },
   });
 
   const onSubmit = form.handleSubmit((values) => {
     startTransition(async () => {
       setLookupError(null);
       setLookupMessage(null);
-
       const response = await fetch("/api/track-orders", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(values),
       });
       const result = (await response.json().catch(() => null)) as
@@ -82,7 +83,7 @@ export function TrackOrderPage() {
 
       if (!response.ok) {
         setOrders([]);
-        setLookupError(result?.error ?? "Lookup failed.");
+        setLookupError(result?.error ?? "Không thể tra cứu đơn lúc này.");
         return;
       }
 
@@ -90,148 +91,195 @@ export function TrackOrderPage() {
       setOrders(nextOrders);
       setLookupMessage(
         nextOrders.length
-          ? `Found ${nextOrders.length} matching order.`
-          : "No order matched the provided order number and phone number.",
+          ? `Tìm thấy ${nextOrders.length} đơn hàng.`
+          : "Không tìm thấy đơn hàng với thông tin này.",
       );
     });
   });
 
   return (
-    <div className="min-h-screen bg-brand-black px-5 py-10 text-white md:px-8">
-      <div className="mx-auto max-w-5xl space-y-8">
-        <section className="rounded-[2rem] border border-white/10 bg-[radial-gradient(circle_at_top,rgba(245,168,0,0.10),transparent_35%),rgba(255,255,255,0.02)] p-6 md:p-8">
-          <p className="text-xs uppercase tracking-[0.35em] text-gold-500">Track order</p>
-          <h1 className="mt-4 font-display text-5xl leading-none tracking-wide">
-            LOOK UP YOUR ORDER
-          </h1>
-          <p className="mt-4 max-w-2xl text-sm text-white/60">
-            Enter the order number and checkout phone number to load one guest order securely.
+    <div className="min-h-screen bg-[var(--background)] text-[#111111]">
+      <section className="border-b border-[var(--border)] bg-white">
+        <div className="mx-auto max-w-[1080px] px-4 py-10 sm:px-6 lg:px-8 lg:py-14">
+          <p className="font-heading size-label font-semibold uppercase tracking-[0.28em] text-store-blue">
+            Tra cứu đơn hàng
           </p>
+          <h1 className="mt-4 max-w-[14ch] font-heading type-vn-display size-display-sm font-semibold uppercase text-[#111111] sm:max-w-[15ch] sm:size-display-md">
+            Kiểm tra trạng thái đơn nhanh bằng mã đơn và số điện thoại.
+          </h1>
+          <p className="mt-5 max-w-[620px] size-copy-md text-store-muted">
+            Nhập đúng thông tin đã dùng khi đặt hàng để xem trạng thái, tổng tiền
+            và mã vận chuyển hiện tại trong một màn hình gọn hơn.
+          </p>
+        </div>
+      </section>
 
-          <form className="mt-8 space-y-4" onSubmit={onSubmit}>
-            <div className="space-y-2">
-              <Label htmlFor="track-order-number">Order number</Label>
-              <Input
+      <section className="mx-auto max-w-[1080px] px-4 py-8 sm:px-6 lg:px-8">
+        <div className="rounded-[32px] border border-[var(--border)] bg-white p-5 sm:p-6">
+          <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <p className="font-heading size-kicker-xs font-semibold uppercase tracking-[0.22em] text-store-blue">
+                Thông tin tra cứu
+              </p>
+              <h2 className="mt-2 max-w-[16ch] font-heading type-vn-title size-title-md font-semibold uppercase text-[#111111] sm:max-w-[18ch]">
+                Nhập mã đơn và số điện thoại
+              </h2>
+            </div>
+            <div className="inline-flex items-center gap-2 rounded-full bg-store-blue-soft px-4 py-2 text-sm text-store-blue">
+              <PackageSearch className="h-4 w-4" />
+              Cập nhật theo trạng thái đơn mới nhất
+            </div>
+          </div>
+
+          <form className="mt-6 grid gap-4 lg:grid-cols-[1fr_1fr_auto]" onSubmit={onSubmit}>
+            <div>
+              <label
+                htmlFor="track-order-number"
+                className="mb-1.5 block font-heading size-kicker-xs font-semibold uppercase tracking-[0.18em] text-store-muted"
+              >
+                Mã đơn hàng
+              </label>
+              <input
                 id="track-order-number"
                 placeholder="NH260407123456"
                 {...form.register("orderNumber")}
+                className="w-full rounded-[22px] border border-[var(--border)] bg-white px-4 py-3.5 size-copy text-[#111111] outline-none transition-colors placeholder:text-store-muted/70 focus:border-store-blue"
               />
-              <p className="text-xs text-red-400">
-                {form.formState.errors.orderNumber?.message}
-              </p>
+              {form.formState.errors.orderNumber?.message ? (
+                <p className="mt-1.5 text-sm text-red-500">
+                  {form.formState.errors.orderNumber.message}
+                </p>
+              ) : null}
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="track-phone">Phone number</Label>
-              <div className="flex flex-col gap-3 sm:flex-row">
-                <Input
-                  id="track-phone"
-                  placeholder="0901234567"
-                  {...form.register("phone")}
-                />
-                <Button
-                  type="submit"
-                  className="bg-gold-500 text-black hover:bg-gold-400"
-                  disabled={isPending}
-                >
-                  <Search className="size-4" />
-                  {isPending ? "Searching..." : "Search"}
-                </Button>
-              </div>
-              <p className="text-xs text-red-400">{form.formState.errors.phone?.message}</p>
+            <div>
+              <label
+                htmlFor="track-phone"
+                className="mb-1.5 block font-heading size-kicker-xs font-semibold uppercase tracking-[0.18em] text-store-muted"
+              >
+                Số điện thoại
+              </label>
+              <input
+                id="track-phone"
+                placeholder="0901234567"
+                {...form.register("phone")}
+                className="w-full rounded-[22px] border border-[var(--border)] bg-white px-4 py-3.5 size-copy text-[#111111] outline-none transition-colors placeholder:text-store-muted/70 focus:border-store-blue"
+              />
+              {form.formState.errors.phone?.message ? (
+                <p className="mt-1.5 text-sm text-red-500">
+                  {form.formState.errors.phone.message}
+                </p>
+              ) : null}
             </div>
+
+            <button
+              type="submit"
+              disabled={isPending}
+              className="inline-flex h-[54px] items-center justify-center gap-2 rounded-full bg-[#111111] px-6 font-heading size-label font-semibold uppercase tracking-[0.18em] text-white transition-colors hover:bg-store-blue disabled:bg-store-blue-soft disabled:text-store-blue"
+            >
+              <Search className="h-4 w-4" />
+              {isPending ? "Đang tìm..." : "Tra cứu"}
+            </button>
           </form>
 
           {lookupError ? (
-            <p className="mt-4 rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+            <p className="mt-4 rounded-[22px] border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
               {lookupError}
             </p>
           ) : null}
 
           {lookupMessage ? (
-            <p className="mt-4 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-white/70">
+            <p className="mt-4 rounded-[22px] border border-[var(--border)] bg-[var(--surface)] px-4 py-3 text-sm text-store-muted">
               {lookupMessage}
             </p>
           ) : null}
-        </section>
+        </div>
 
-        <section className="space-y-4">
-          {orders.length ? (
-            orders.map((order) => (
+        <div className="mt-6 space-y-4">
+          {orders.map((order) => {
+            const statusInfo = STATUS_MAP[order.status] ?? STATUS_MAP.pending;
+            return (
               <article
                 key={order.id}
-                className="rounded-[2rem] border border-white/10 bg-white/[0.03] p-6"
+                className="rounded-[32px] border border-[var(--border)] bg-white p-5 sm:p-6"
               >
-                <div className="flex flex-col gap-4 border-b border-white/10 pb-5 sm:flex-row sm:items-start sm:justify-between">
+                <div className="flex flex-col gap-4 border-b border-[var(--border)] pb-5 sm:flex-row sm:items-start sm:justify-between">
                   <div>
-                    <p className="text-xs uppercase tracking-[0.25em] text-gold-500">
+                    <p className="font-heading size-kicker-xs font-semibold uppercase tracking-[0.18em] text-store-blue">
                       {order.orderNumber}
                     </p>
-                    <p className="mt-2 text-sm text-white/50">{formatDate(order.createdAt)}</p>
+                    <p className="mt-2 text-sm text-store-muted">{formatDate(order.createdAt)}</p>
                   </div>
+
                   <div className="flex flex-col items-start gap-2 sm:items-end">
                     <span
-                      className={cn(
-                        "inline-flex rounded-full px-2 py-1 text-xs font-medium capitalize",
-                        statusClass(order.status),
-                      )}
+                      className={[
+                        "rounded-full border px-4 py-2 font-heading size-kicker-xs font-semibold uppercase tracking-[0.16em]",
+                        statusInfo.className,
+                      ].join(" ")}
                     >
-                      {order.status}
+                      {statusInfo.label}
                     </span>
-                    <p className="font-display text-2xl text-gold-500">
+                    <p className="font-heading size-title-md font-semibold text-[#111111]">
                       {formatPrice(order.total)}
                     </p>
                   </div>
                 </div>
 
-                <div className="mt-5 grid gap-5 lg:grid-cols-[1.6fr_0.8fr]">
+                <div className="mt-5 grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
                   <div className="space-y-3">
                     {order.items.map((item) => (
                       <div
                         key={item.id}
-                        className="rounded-2xl border border-white/10 px-4 py-3"
+                        className="flex items-start justify-between gap-3 rounded-[24px] border border-[var(--border)] bg-[var(--surface)] px-4 py-4"
                       >
-                        <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <p className="font-medium">{item.productName}</p>
-                            <p className="text-sm text-white/50">{item.variantLabel}</p>
-                          </div>
-                          <div className="text-right text-sm text-white/60">
-                            <p>x{item.qty}</p>
-                            <p>{formatPrice(item.lineTotal)}</p>
-                          </div>
+                        <div>
+                          <p className="font-heading size-action font-semibold uppercase tracking-[0.08em] text-[#111111]">
+                            {item.productName}
+                          </p>
+                          <p className="mt-1 text-sm text-store-muted">{item.variantLabel}</p>
+                        </div>
+                        <div className="text-right text-sm text-store-muted">
+                          <p>x{item.qty}</p>
+                          <p className="mt-1 font-semibold text-[#111111]">
+                            {formatPrice(item.lineTotal)}
+                          </p>
                         </div>
                       </div>
                     ))}
                   </div>
 
-                  <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-                    <p className="text-xs uppercase tracking-[0.2em] text-white/45">
-                      Shipment
+                  <div className="rounded-[28px] border border-[var(--border)] bg-white p-5">
+                    <p className="font-heading size-kicker-xs font-semibold uppercase tracking-[0.18em] text-store-blue">
+                      Thông tin vận chuyển
                     </p>
-                    <div className="mt-3 space-y-2 text-sm">
+                    <div className="mt-4 space-y-4 text-sm">
                       <div className="flex items-center justify-between gap-3">
-                        <span className="text-white/55">Tracking code</span>
-                        <span className="text-white/80">
-                          {order.trackingCode || "Not assigned"}
+                        <span className="text-store-muted">Mã vận chuyển</span>
+                        <span className="font-semibold text-[#111111]">
+                          {order.trackingCode || "Chưa có"}
                         </span>
                       </div>
                       <div className="flex items-center justify-between gap-3">
-                        <span className="text-white/55">Status</span>
-                        <span className="text-white/80 capitalize">{order.status}</span>
+                        <span className="text-store-muted">Trạng thái</span>
+                        <span className="font-semibold text-[#111111]">{statusInfo.label}</span>
                       </div>
                     </div>
                   </div>
                 </div>
               </article>
-            ))
-          ) : (
-            <div className="rounded-[2rem] border border-dashed border-white/10 px-6 py-14 text-center text-sm text-white/40">
-              Search with your order number and checkout phone number to load the order.
-            </div>
-          )}
-        </section>
-      </div>
+            );
+          })}
+        </div>
+
+        {orders.length === 0 && !lookupError && !lookupMessage ? (
+          <div className="mt-6 rounded-[32px] border border-dashed border-[var(--border)] bg-white px-6 py-16 text-center">
+            <p className="mx-auto max-w-[14ch] font-heading type-vn-title size-title-sm font-semibold uppercase text-[#111111]">
+              Nhập thông tin để bắt đầu tra cứu
+            </p>
+          </div>
+        ) : null}
+      </section>
     </div>
   );
 }

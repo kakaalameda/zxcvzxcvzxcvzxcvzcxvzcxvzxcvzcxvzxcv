@@ -6,8 +6,6 @@ import {
   type SearchableDropdownOption,
 } from "@/components/searchable-dropdown";
 
-type AddressSyncStatus = "idle" | "loading" | "success" | "warning" | "error";
-
 interface CheckoutAddressValue {
   province: string;
   district: string;
@@ -24,10 +22,7 @@ interface CheckoutAddressErrors {
 interface CheckoutAddressSectionProps {
   value: CheckoutAddressValue;
   errors: CheckoutAddressErrors;
-  addressSyncStatus: AddressSyncStatus;
-  addressSyncMessage: string;
   onFieldChange: (field: keyof CheckoutAddressValue, value: string) => void;
-  onRetryNormalize: () => void;
 }
 
 async function fetchAddressOptions(args: {
@@ -36,9 +31,7 @@ async function fetchAddressOptions(args: {
   provinceCode?: number | null;
   districtCode?: number | null;
 }) {
-  const params = new URLSearchParams({
-    kind: args.kind,
-  });
+  const params = new URLSearchParams({ kind: args.kind });
 
   if (args.query.trim()) {
     params.set("q", args.query.trim());
@@ -75,7 +68,7 @@ function TextField(props: {
 }) {
   return (
     <div className={props.className}>
-      <label className="block font-heading text-[0.72rem] tracking-[0.18em] uppercase text-white/40 font-bold mb-1.5">
+      <label className="mb-1.5 block font-heading size-kicker-xs font-semibold uppercase tracking-[0.18em] text-store-muted">
         {props.label}
       </label>
       <input
@@ -83,17 +76,11 @@ function TextField(props: {
         onChange={(event) => props.onChange(event.target.value)}
         placeholder={props.placeholder}
         className={[
-          "w-full bg-brand-gray-mid border text-white font-heading text-[0.9rem] tracking-wide px-3.5 py-3 outline-none transition-colors duration-200 placeholder:text-white/30",
-          props.error
-            ? "border-red-400/70 focus:border-red-400"
-            : "border-white/15 focus:border-gold-500/40",
+          "w-full rounded-[22px] border bg-white px-4 py-3.5 size-copy text-[#111111] outline-none transition-colors placeholder:text-store-muted/70",
+          props.error ? "border-red-400 focus:border-red-400" : "border-[var(--border)] focus:border-store-blue",
         ].join(" ")}
       />
-      {props.error ? (
-        <p className="mt-1 font-heading text-[0.68rem] text-red-400 tracking-wide">
-          {props.error}
-        </p>
-      ) : null}
+      {props.error ? <p className="mt-1.5 text-sm text-red-500">{props.error}</p> : null}
     </div>
   );
 }
@@ -101,16 +88,13 @@ function TextField(props: {
 export function CheckoutAddressSection({
   value,
   errors,
-  addressSyncStatus,
-  addressSyncMessage,
   onFieldChange,
-  onRetryNormalize,
 }: CheckoutAddressSectionProps) {
   const [provinceCode, setProvinceCode] = useState<number | null>(null);
   const [districtCode, setDistrictCode] = useState<number | null>(null);
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       <SearchableDropdown
         label="Tỉnh / Thành phố *"
         value={value.province}
@@ -139,7 +123,7 @@ export function CheckoutAddressSection({
         helperText="Tìm theo tên tỉnh/thành trong dữ liệu hành chính Việt Nam."
       />
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+      <div className="grid gap-4 sm:grid-cols-2">
         <SearchableDropdown
           label="Quận / Huyện"
           value={value.district}
@@ -165,7 +149,7 @@ export function CheckoutAddressSection({
           helperText={
             value.province.trim()
               ? "Có thể gõ để tìm hoặc chọn nhanh từ danh sách."
-              : "Nhập hoặc chọn tỉnh/thành trước."
+              : "Chọn tỉnh/thành trước."
           }
         />
 
@@ -190,8 +174,8 @@ export function CheckoutAddressSection({
           }}
           helperText={
             value.district.trim()
-              ? "Danh sách sẽ hẹp lại theo quận/huyện đã chọn."
-              : "Nhập hoặc chọn quận/huyện trước."
+              ? "Danh sách sẽ thu hẹp theo quận/huyện đã chọn."
+              : "Chọn quận/huyện trước."
           }
         />
       </div>
@@ -210,38 +194,6 @@ export function CheckoutAddressSection({
         placeholder="Ghi chú cho người giao hàng..."
         onChange={(nextValue) => onFieldChange("note", nextValue)}
       />
-
-      <div className="flex items-start justify-between gap-3 border border-white/[0.08] bg-brand-gray-dark px-4 py-3">
-        <div>
-          <p className="font-heading text-[0.72rem] tracking-[0.18em] uppercase text-gold-500 font-bold">
-            Địa chỉ giao hàng
-          </p>
-          <p
-            className={[
-              "mt-1 font-heading text-[0.72rem] tracking-wide",
-              addressSyncStatus === "error"
-                ? "text-red-400"
-                : addressSyncStatus === "warning"
-                  ? "text-amber-300"
-                : addressSyncStatus === "success"
-                  ? "text-green-400"
-                  : "text-white/45",
-            ].join(" ")}
-          >
-            {addressSyncMessage ||
-              "Địa chỉ sẽ được đối chiếu tự động với GHTK khi bạn nhập và trước khi đặt hàng."}
-          </p>
-        </div>
-        {addressSyncStatus === "error" ? (
-          <button
-            type="button"
-            onClick={onRetryNormalize}
-            className="border border-gold-500/35 px-3 py-2 font-heading text-[0.68rem] tracking-[0.18em] uppercase text-gold-500 transition-colors hover:bg-gold-500/10"
-          >
-            Thử lại
-          </button>
-        ) : null}
-      </div>
     </div>
   );
 }

@@ -1,13 +1,27 @@
 "use client";
 
 import Link from "next/link";
+import {
+  ArrowLeft,
+  ArrowRight,
+  Check,
+  ChevronDown,
+  Minus,
+  Plus,
+  Ruler,
+  ShieldCheck,
+  ShoppingBag,
+  Sparkles,
+  Star,
+  Truck,
+} from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useCart } from "@/components/cart-context";
 import { ProductMedia } from "@/components/product-media";
+import { StoreProductCard } from "@/components/store-product-card";
 import {
-  BRAND_PERKS,
   buildCartItem,
-  formatCompactPrice,
+  formatVnd,
   getDefaultSize,
   type Product,
   type ProductColor,
@@ -16,533 +30,732 @@ import {
 
 type AddState = "idle" | "loading" | "success";
 
-// ─── Dữ liệu bảng hướng dẫn chọn size ───────────────────────────────────────
-const SIZE_GUIDE_COLS = ["S", "M", "L", "XL", "2XL", "3XL"];
+const SIZE_GUIDE_COLUMNS = ["S", "M", "L", "XL", "XXL"];
 const SIZE_GUIDE_ROWS = [
-  { label: "Chiều cao (cm)", values: ["155–160", "160–165", "165–172", "172–177", "177–183", "183–189"] },
-  { label: "Cân nặng (kg)",  values: ["48–55",   "55–62",   "62–69",   "69–76",   "76–85",   "85–90"]  },
-  { label: "Dài thân trước", values: ["65",   "67",   "69",   "71",   "73",   "75"]   },
-  { label: "1/2 ngang ngực", values: ["47",   "49",   "51",   "53",   "55",   "57"]   },
-  { label: "1/2 ngang gấu",  values: ["47",   "40",   "51",   "53",   "55",   "57"]   },
-  { label: "Dài tay",        values: ["34.5", "36",   "37",   "39",   "40.5", "42"]   },
-  { label: "Rộng bắp tay",   values: ["19.6", "20.4", "21.2", "22",   "22.8", "23.6"] },
-  { label: "Rộng cửa tay",   values: ["16",   "16.5", "16",   "17",   "18",   "18.5"] },
-  { label: "Ngang cổ",       values: ["16",   "15.5", "15",   "16.5", "17",   "17.5"] },
+  { label: "Chiều cao (cm)", values: ["155-162", "162-168", "168-174", "174-180", "180-186"] },
+  { label: "Cân nặng (kg)", values: ["48-56", "56-63", "63-71", "71-80", "80-88"] },
+  { label: "Ngang ngực", values: ["49", "51", "53", "55", "57"] },
+  { label: "Dài áo", values: ["68", "70", "72", "74", "76"] },
 ];
 
-// ─── Icon components ──────────────────────────────────────────────────────────
-const IconCart = ({ className }: { className?: string }) => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className={className ?? "w-5 h-5"}>
-    <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z" />
-    <line x1="3" y1="6" x2="21" y2="6" />
-    <path d="M16 10a4 4 0 01-8 0" />
-  </svg>
-);
+const TRUST_ITEMS = [
+  {
+    icon: Truck,
+    title: "Giao nhanh toàn quốc",
+    text: "Đơn hàng được xử lý rõ trạng thái và theo dõi thuận tiện hơn.",
+  },
+  {
+    icon: ShieldCheck,
+    title: "Đổi trả trong 30 ngày",
+    text: "Dễ xử lý nếu cần đổi size hoặc điều chỉnh đơn.",
+  },
+  {
+    icon: Sparkles,
+    title: "Chất liệu đáng tin",
+    text: "Cotton, fleece và canvas được chọn lọc kỹ, kiểm định từng lô trước khi ra sản phẩm.",
+  },
+];
 
-const IconHeart = ({ filled }: { filled: boolean }) => (
-  <svg viewBox="0 0 24 24" fill={filled ? "#F5A800" : "none"} stroke={filled ? "#F5A800" : "currentColor"} strokeWidth={1.5} className="w-4 h-4">
-    <path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z" />
-  </svg>
-);
+const CATEGORY_LABELS: Record<Product["category"], string> = {
+  Tee: "Áo thun",
+  Hoodie: "Hoodie",
+  Pants: "Quần",
+};
 
-const IconCheck = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-5 h-5">
-    <polyline points="20 6 9 17 4 12" />
-  </svg>
-);
+function RatingStars({ rating, compact = false }: { rating: number; compact?: boolean }) {
+  const sizeClass = compact ? "h-4 w-4" : "h-5 w-5";
 
-const IconPlus = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} className="w-3.5 h-3.5">
-    <line x1="12" y1="5" x2="12" y2="19" />
-    <line x1="5" y1="12" x2="19" y2="12" />
-  </svg>
-);
-
-const IconChevL = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-4 h-4">
-    <path d="M15 18l-6-6 6-6" />
-  </svg>
-);
-
-const IconChevR = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-4 h-4">
-    <path d="M9 18l6-6-6-6" />
-  </svg>
-);
-
-const IconX = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-5 h-5">
-    <line x1="18" y1="6" x2="6" y2="18" />
-    <line x1="6" y1="6" x2="18" y2="18" />
-  </svg>
-);
-
-const IconRuler = ({ className }: { className?: string }) => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className={className ?? "w-3.5 h-3.5"}>
-    <path d="M21 5L3 5a1 1 0 00-1 1v4a1 1 0 001 1h18a1 1 0 001-1V6a1 1 0 00-1-1z" />
-    <line x1="7"  y1="5"  x2="7"  y2="8"  />
-    <line x1="11" y1="5"  x2="11" y2="9"  />
-    <line x1="15" y1="5"  x2="15" y2="8"  />
-    <line x1="19" y1="5"  x2="19" y2="8"  />
-  </svg>
-);
-
-// ─── Stars ────────────────────────────────────────────────────────────────────
-function Stars({ rating }: { rating: number }) {
   return (
-    <div className="flex gap-0.5">
-      {[1, 2, 3, 4, 5].map((star) => {
-        const filled = star <= Math.floor(rating);
-        const half = !filled && star === Math.ceil(rating) && !Number.isInteger(rating);
+    <div className="flex items-center gap-1">
+      {Array.from({ length: 5 }).map((_, index) => {
+        const active = index < Math.round(rating);
         return (
-          <svg key={star} viewBox="0 0 24 24" className="w-3.5 h-3.5" fill={filled ? "#F5A800" : half ? "url(#half-star)" : "rgba(255,255,255,0.15)"}>
-            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-          </svg>
+          <Star
+            key={index}
+            className={[
+              sizeClass,
+              active ? "fill-[#111111] text-[#111111]" : "fill-[#d7dce5] text-[#d7dce5]",
+            ].join(" ")}
+          />
         );
       })}
-      <svg width="0" height="0" className="absolute">
-        <defs>
-          <linearGradient id="half-star" x1="0" x2="1" y1="0" y2="0">
-            <stop offset="50%" stopColor="#F5A800" />
-            <stop offset="50%" stopColor="rgba(255,255,255,0.2)" />
-          </linearGradient>
-        </defs>
-      </svg>
     </div>
   );
 }
 
-// ─── Spinner ──────────────────────────────────────────────────────────────────
-function Spinner() {
-  return <div className="w-5 h-5 border-2 border-white/20 border-t-gold-500 rounded-full animate-spin flex-shrink-0" />;
-}
-
-// ─── SizeGuideModal ───────────────────────────────────────────────────────────
 function SizeGuideModal({ onClose }: { onClose: () => void }) {
   useEffect(() => {
-    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
     document.body.style.overflow = "hidden";
-    window.addEventListener("keydown", handler);
     return () => {
       document.body.style.overflow = "";
-      window.removeEventListener("keydown", handler);
     };
-  }, [onClose]);
+  }, []);
 
   return (
     <>
-      {/* ── Overlay ── */}
-      <div
-        className="fixed inset-0 bg-black/70 backdrop-blur-[3px] z-[400]"
-        onClick={onClose}
-      />
-
-      {/* ── Shell: bottom-sheet on mobile / centered card on desktop ── */}
-      <div className="fixed inset-x-0 bottom-0 z-[401] md:inset-0 md:flex md:items-center md:justify-center md:p-6 pointer-events-none">
-        <div className="pointer-events-auto w-full md:max-w-2xl flex flex-col max-h-[88vh] md:max-h-[82vh] bg-[#0d0d0d] border border-white/10 rounded-t-2xl md:rounded-none shadow-[0_-8px_40px_rgba(0,0,0,0.7)] md:shadow-[0_24px_60px_rgba(0,0,0,0.8)]">
-
-          {/* Pill handle (mobile only) */}
-          <div className="md:hidden flex justify-center pt-3 pb-1 flex-shrink-0">
-            <div className="w-9 h-1 rounded-full bg-white/20" />
+      <div className="fixed inset-0 z-[120] bg-black/35" onClick={onClose} />
+      <div className="fixed inset-x-0 bottom-0 z-[121] rounded-t-[28px] border border-[var(--border)] bg-white p-5 shadow-[0_-24px_80px_rgba(17,17,17,0.18)] md:inset-auto md:left-1/2 md:top-1/2 md:w-full md:max-w-[760px] md:-translate-x-1/2 md:-translate-y-1/2 md:rounded-[32px] md:p-8">
+        <div className="mx-auto mb-4 h-1.5 w-14 rounded-full bg-[var(--border)] md:hidden" />
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="font-heading size-kicker font-semibold uppercase tracking-[0.22em] text-store-blue">
+              Chọn size
+            </p>
+            <h3 className="mt-2 font-heading type-vn-title size-title-md font-semibold uppercase text-[#111111]">
+              Bảng tham khảo
+            </h3>
           </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-full border border-[var(--border)] px-4 py-2 text-sm text-store-muted transition-colors hover:border-store-blue hover:text-store-blue"
+          >
+            Đóng
+          </button>
+        </div>
 
-          {/* Gold accent bar */}
-          <div className="h-[2px] flex-shrink-0 mx-0 bg-gradient-to-r from-transparent via-gold-500/80 to-transparent" />
-
-          {/* ── Header ── */}
-          <div className="flex items-center justify-between px-5 py-4 flex-shrink-0">
-            <div className="flex items-center gap-3">
-              {/* Measurement icon badge */}
-              <div className="w-8 h-8 flex items-center justify-center border border-gold-500/30 bg-gold-500/5 flex-shrink-0">
-                <IconRuler className="w-4 h-4 text-gold-500" />
-              </div>
-              <div>
-                <h3 className="font-heading font-bold text-[0.78rem] tracking-[0.15em] uppercase text-white leading-none">
-                  Bảng Hướng Dẫn Chọn Size
-                </h3>
-                <p className="text-[0.62rem] font-body text-zinc-500 mt-1 tracking-[0.1em] uppercase">
-                  Đơn vị đo: cm
-                </p>
-              </div>
-            </div>
-            <button
-              onClick={onClose}
-              className="w-8 h-8 flex items-center justify-center text-zinc-500 hover:text-white hover:bg-white/8 border border-transparent hover:border-white/15 transition-all duration-150 cursor-pointer flex-shrink-0"
-              aria-label="Đóng"
-            >
-              <IconX />
-            </button>
-          </div>
-
-          {/* Divider */}
-          <div className="h-px mx-5 bg-white/8 flex-shrink-0" />
-
-          {/* ── Table ── */}
-          <div className="overflow-auto flex-1 overscroll-contain">
-            <table className="w-full text-sm border-collapse" style={{ minWidth: 500 }}>
-              <thead>
-                <tr>
-                  {/* Empty corner — sticky */}
-                  <th className="sticky left-0 z-10 bg-[#0d0d0d] shadow-[4px_0_12px_rgba(0,0,0,0.5)] min-w-[136px] py-3 px-4" />
-                  {SIZE_GUIDE_COLS.map((col) => (
-                    <th
-                      key={col}
-                      className="py-3 px-3 min-w-[68px] font-heading font-bold text-center text-[0.85rem] tracking-[0.08em] text-gold-500"
+        <div className="mt-6 overflow-x-auto">
+          <table className="min-w-full border-separate border-spacing-0 overflow-hidden rounded-[24px] border border-[var(--border)]">
+            <thead>
+              <tr className="bg-[var(--surface)]">
+                <th className="px-4 py-3 text-left font-heading size-kicker font-semibold uppercase tracking-[0.18em] text-store-muted" />
+                {SIZE_GUIDE_COLUMNS.map((column) => (
+                  <th
+                    key={column}
+                    className="px-4 py-3 text-center font-heading size-label font-semibold uppercase tracking-[0.18em] text-[#111111]"
+                  >
+                    {column}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {SIZE_GUIDE_ROWS.map((row) => (
+                <tr key={row.label} className="bg-white even:bg-[#fafbfc]">
+                  <td className="border-t border-[var(--border)] px-4 py-3 text-sm text-store-muted">
+                    {row.label}
+                  </td>
+                  {row.values.map((value) => (
+                    <td
+                      key={value}
+                      className="border-t border-[var(--border)] px-4 py-3 text-center text-sm text-[#111111]"
                     >
-                      {col}
-                    </th>
+                      {value}
+                    </td>
                   ))}
                 </tr>
-                {/* Header separator */}
-                <tr>
-                  <td colSpan={SIZE_GUIDE_COLS.length + 1} className="p-0">
-                    <div className="h-px bg-white/10" />
-                  </td>
-                </tr>
-              </thead>
-
-              <tbody>
-                {SIZE_GUIDE_ROWS.map((row, i) => (
-                  <tr
-                    key={row.label}
-                    className={`transition-colors hover:bg-gold-500/[0.04] ${i % 2 === 1 ? "bg-white/[0.025]" : ""}`}
-                  >
-                    {/* Sticky label cell */}
-                    <td className="sticky left-0 z-10 bg-[#0d0d0d] shadow-[4px_0_12px_rgba(0,0,0,0.4)] py-3 px-4 font-heading font-semibold text-[0.74rem] tracking-wide text-zinc-300 whitespace-nowrap border-r border-white/[0.06]">
-                      {row.label}
-                    </td>
-                    {row.values.map((val, j) => (
-                      <td
-                        key={j}
-                        className="py-3 px-3 text-center text-[0.82rem] font-body text-zinc-400 tabular-nums"
-                      >
-                        {val}
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          {/* ── Footer ── */}
-          <div className="h-px mx-5 bg-white/8 flex-shrink-0" />
-          <div className="flex items-start gap-2 px-5 py-3.5 flex-shrink-0">
-            <span className="text-gold-500/70 font-bold text-[0.7rem] leading-4 mt-px flex-shrink-0">✱</span>
-            <p className="text-[0.69rem] font-body text-zinc-500 leading-relaxed">
-              Số đo tính bằng{" "}
-              <span className="text-zinc-300 font-semibold">cm</span>.
-              {" "}Sản phẩm có thể chênh lệch ±1–2 cm tuỳ lô sản xuất.
-            </p>
-          </div>
-
+              ))}
+            </tbody>
+          </table>
         </div>
       </div>
     </>
   );
 }
 
-// ─── ImageGallery ─────────────────────────────────────────────────────────────
 function ImageGallery({
   images,
   selectedColor,
-  tag,
 }: {
   images: Product["images"];
   selectedColor: ProductColor;
-  tag?: string;
 }) {
-  const [active, setActive] = useState(0);
-
-  useEffect(() => {
-    const handler = (event: KeyboardEvent) => {
-      if (event.key === "ArrowLeft")  setActive((i) => (i - 1 + images.length) % images.length);
-      if (event.key === "ArrowRight") setActive((i) => (i + 1) % images.length);
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [images.length]);
-
-  const current = images[active];
+  const [activeIndex, setActiveIndex] = useState(0);
+  const activeImage = images[activeIndex] ?? images[0];
 
   return (
-    // FIX MOBILE: đổi thành flex-col trên mobile, flex-row trên desktop.
-    // Trước đây outer là flex-row khiến thumbnail strip w-full đẩy ảnh chính ra khỏi viewport.
-    <div className="flex flex-col md:flex-row gap-px bg-brand-gray-mid md:sticky md:top-[57px] md:h-[calc(100vh-57px)]">
-
-      {/* Thumbnail strip — hiển thị trên cùng (mobile) hoặc bên trái (desktop) */}
-      <div className="order-2 md:order-1 flex flex-row md:flex-col gap-px w-full md:w-[88px] md:flex-shrink-0 overflow-x-auto md:overflow-y-auto md:overflow-x-hidden h-[72px] md:h-auto scrollbar-none flex-shrink-0">
+    <div className="grid gap-3 lg:grid-cols-[92px_minmax(0,1fr)]">
+      <div className="order-2 flex gap-3 overflow-x-auto py-2 lg:order-1 lg:flex-col lg:py-0">
         {images.map((image, index) => (
           <button
             key={image.id}
-            onClick={() => setActive(index)}
-            aria-label={image.alt}
+            type="button"
+            onClick={() => setActiveIndex(index)}
             className={[
-              "flex-shrink-0 w-[72px] h-[72px] md:w-[88px] md:h-[88px] flex items-center justify-center overflow-hidden bg-brand-gray-dark border-2 transition-colors duration-200 cursor-pointer",
-              active === index ? "border-gold-500" : "border-transparent hover:border-gold-500/30",
+              "shrink-0 overflow-hidden rounded-[22px] border bg-white",
+              index === activeIndex
+                ? "border-store-blue shadow-[0_10px_30px_rgba(36,71,249,0.16)]"
+                : "border-[var(--border)]",
             ].join(" ")}
           >
-            <ProductMedia
-              image={image}
-              bgClass={image.bgClass}
-              className="h-full w-full flex items-center justify-center transition-transform duration-300 hover:scale-105"
-              imageClassName="h-full w-full object-cover"
-              svgClassName="h-8 w-8"
-              stroke="rgba(245,168,0,0.35)"
-              strokeWidth={1}
-            />
+            <div className="h-[84px] w-[84px]">
+              <ProductMedia
+                image={image}
+                bgClass={image.bgClass}
+                className="h-full w-full"
+                imageClassName="h-full w-full object-cover"
+                svgClassName="h-12 w-12 opacity-15"
+                stroke="rgba(0,0,0,0.08)"
+              />
+            </div>
           </button>
         ))}
       </div>
 
-      {/* Main image — full width + aspect-square trên mobile, flex-1 trên desktop */}
-      <div className="order-1 md:order-2 relative w-full md:flex-1 bg-brand-gray-mid flex items-center justify-center overflow-hidden aspect-square md:aspect-auto">
-        <ProductMedia
-          image={current}
-          bgClass={current.bgClass}
-          className="absolute inset-0 h-full w-full flex items-center justify-center transition-transform duration-700"
-          imageClassName="h-full w-full object-cover"
-          svgClassName="h-36 w-36 md:h-48 md:w-48"
-          stroke="rgba(245,168,0,0.15)"
-          strokeWidth={0.4}
-        />
-
-        {tag ? (
-          <div className="absolute top-4 left-4 bg-gold-500 text-brand-black font-heading text-[0.65rem] font-bold tracking-[0.15em] uppercase px-2.5 py-1 z-10">
-            {tag}
+      <div className="order-1 overflow-hidden rounded-[36px] border border-[var(--border)] bg-white lg:order-2">
+        <div className="relative aspect-square bg-[var(--surface)] sm:aspect-[4/4.5]">
+          <ProductMedia
+            image={activeImage}
+            bgClass={activeImage.bgClass}
+            className="h-full w-full"
+            imageClassName="h-full w-full object-cover"
+            svgClassName="h-28 w-28 opacity-15"
+            stroke="rgba(0,0,0,0.08)"
+          />
+          <div className="absolute left-5 top-5 rounded-full bg-white/92 px-4 py-2 font-heading size-kicker-xs font-semibold uppercase tracking-[0.2em] text-[#111111] shadow-sm">
+            {selectedColor.name}
           </div>
-        ) : null}
 
-        <div className="absolute top-4 right-4 border border-white/15 bg-black/40 px-3 py-1 font-heading text-[0.68rem] tracking-[0.15em] uppercase text-white/60 z-10">
-          {selectedColor.name}
-        </div>
-
-        <button
-          onClick={() => setActive((i) => (i - 1 + images.length) % images.length)}
-          aria-label="Ảnh trước"
-          className="absolute left-3 top-1/2 -translate-y-1/2 w-9 h-9 bg-black/60 border border-white/15 text-white/70 flex items-center justify-center cursor-pointer hover:border-gold-500/40 hover:text-gold-500 transition-all duration-200 z-10"
-        >
-          <IconChevL />
-        </button>
-        <button
-          onClick={() => setActive((i) => (i + 1) % images.length)}
-          aria-label="Ảnh tiếp theo"
-          className="absolute right-3 top-1/2 -translate-y-1/2 w-9 h-9 bg-black/60 border border-white/15 text-white/70 flex items-center justify-center cursor-pointer hover:border-gold-500/40 hover:text-gold-500 transition-all duration-200 z-10"
-        >
-          <IconChevR />
-        </button>
-
-        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-1.5 z-10">
-          {images.map((image, index) => (
-            <button
-              key={image.id}
-              onClick={() => setActive(index)}
-              aria-label={`Ảnh ${index + 1}`}
-              className={`h-1.5 rounded-full transition-all duration-200 border-none cursor-pointer ${index === active ? "bg-gold-500 w-4" : "bg-white/30 hover:bg-white/60 w-1.5"}`}
-            />
-          ))}
+          {images.length > 1 ? (
+            <>
+              <button
+                type="button"
+                onClick={() => setActiveIndex((current) => (current - 1 + images.length) % images.length)}
+                className="absolute left-4 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-white/70 bg-white/92 text-[#111111] shadow-sm transition-colors hover:text-store-blue"
+                aria-label="Ảnh trước"
+              >
+                <ArrowLeft className="h-4 w-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveIndex((current) => (current + 1) % images.length)}
+                className="absolute right-4 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-white/70 bg-white/92 text-[#111111] shadow-sm transition-colors hover:text-store-blue"
+                aria-label="Ảnh sau"
+              >
+                <ArrowRight className="h-4 w-4" />
+              </button>
+            </>
+          ) : null}
         </div>
       </div>
     </div>
   );
 }
 
-// ─── SizeSelector ─────────────────────────────────────────────────────────────
-function SizeSelector({
-  sizes,
-  selected,
-  onSelect,
-  onShowGuide,
+function QuantitySelector({
+  quantity,
+  max,
+  onChange,
+  compact = false,
 }: {
-  sizes: Product["sizes"];
-  selected: ProductSize | null;
-  onSelect: (size: ProductSize) => void;
-  onShowGuide: () => void;
+  quantity: number;
+  max: number;
+  onChange: (nextQuantity: number) => void;
+  compact?: boolean;
 }) {
   return (
-    <div>
-      <div className="flex items-center justify-between mb-3.5">
-        <p className="font-heading text-[0.72rem] tracking-[0.2em] uppercase text-white/40 font-bold">
-          Size — <span className="text-white font-bold">{selected ?? "Chưa chọn"}</span>
-        </p>
-        <button
-          onClick={onShowGuide}
-          className="flex items-center gap-1 font-heading text-[0.65rem] tracking-widest uppercase text-gold-500/70 hover:text-gold-500 transition-colors bg-transparent border-none cursor-pointer"
-        >
-          <IconRuler />
-          Hướng dẫn chọn size
-        </button>
-      </div>
-      <div className="flex gap-1.5 flex-wrap">
-        {sizes.map(({ size, available }) => (
-          <button
-            key={size}
-            disabled={!available}
-            onClick={() => available && onSelect(size)}
-            className={[
-              "min-w-[52px] px-3 py-2 font-heading font-bold text-[0.9rem] tracking-wide border transition-all duration-200 relative",
-              !available
-                ? "opacity-30 cursor-not-allowed border-white/10 text-white/40 line-through"
-                : selected === size
-                  ? "bg-gold-500 border-gold-500 text-brand-black"
-                  : "bg-transparent border-white/15 text-white/70 hover:border-gold-500/40 hover:text-gold-500 cursor-pointer",
-            ].join(" ")}
-          >
-            {size}
-          </button>
-        ))}
-      </div>
+    <div
+      className={[
+        "inline-flex items-center rounded-full border border-[var(--border)] bg-[var(--surface)] p-1",
+        compact ? "scale-[0.94]" : "",
+      ].join(" ")}
+    >
+      <button
+        type="button"
+        onClick={() => onChange(Math.max(1, quantity - 1))}
+        className="flex h-10 w-10 items-center justify-center rounded-full text-store-muted transition-colors hover:text-store-blue"
+        aria-label="Giảm số lượng"
+      >
+        <Minus className="h-4 w-4" />
+      </button>
+      <span className="w-10 text-center font-heading size-title-xs font-semibold text-[#111111]">
+        {quantity}
+      </span>
+      <button
+        type="button"
+        onClick={() => onChange(Math.min(max, quantity + 1))}
+        className="flex h-10 w-10 items-center justify-center rounded-full text-store-muted transition-colors hover:text-store-blue"
+        aria-label="Tăng số lượng"
+      >
+        <Plus className="h-4 w-4" />
+      </button>
     </div>
   );
 }
 
-// ─── QtyControl ───────────────────────────────────────────────────────────────
-function QtyControl({ qty, onChange, max }: { qty: number; onChange: (value: number) => void; max: number }) {
-  const disabled = max <= 0;
-  return (
-    <div className="flex items-center border border-white/15">
-      <button onClick={() => onChange(Math.max(1, qty - 1))} disabled={disabled} className="w-9 h-9 flex items-center justify-center bg-transparent border-none cursor-pointer disabled:cursor-not-allowed text-white/70 hover:text-gold-500 hover:bg-brand-gray-mid font-heading font-bold text-lg transition-all duration-200">-</button>
-      <span className="w-10 text-center font-heading font-bold text-[0.95rem] border-x border-white/15 leading-9 select-none">{qty}</span>
-      <button onClick={() => onChange(Math.min(max, qty + 1))} disabled={disabled} className="w-9 h-9 flex items-center justify-center bg-transparent border-none cursor-pointer disabled:cursor-not-allowed text-white/70 hover:text-gold-500 hover:bg-brand-gray-mid font-heading font-bold text-lg transition-all duration-200">+</button>
-    </div>
-  );
-}
-
-// ─── AddToCartButton ──────────────────────────────────────────────────────────
-function AddToCartButton({ disabled, onAdd }: { disabled: boolean; onAdd: () => void }) {
+function AddToCartButton({
+  disabled,
+  onAdd,
+}: {
+  disabled: boolean;
+  onAdd: () => void;
+}) {
   const [state, setState] = useState<AddState>("idle");
   const onAddRef = useRef(onAdd);
-  useEffect(() => { onAddRef.current = onAdd; });
 
   useEffect(() => {
-    if (state !== "loading") return;
-    const id = window.setTimeout(() => { onAddRef.current(); setState("success"); }, 800);
-    return () => window.clearTimeout(id);
+    onAddRef.current = onAdd;
+  }, [onAdd]);
+
+  useEffect(() => {
+    if (state !== "loading") {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      onAddRef.current();
+      setState("success");
+    }, 450);
+
+    return () => window.clearTimeout(timeoutId);
   }, [state]);
 
   useEffect(() => {
-    if (state !== "success") return;
-    const id = window.setTimeout(() => setState("idle"), 2500);
-    return () => window.clearTimeout(id);
+    if (state !== "success") {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => setState("idle"), 1800);
+    return () => window.clearTimeout(timeoutId);
   }, [state]);
-
-  const handleClick = () => { if (state === "idle" && !disabled) setState("loading"); };
-
-  const styles: Record<AddState, string> = {
-    idle:    "bg-gold-500 border-gold-500 text-brand-black hover:bg-white hover:border-white",
-    loading: "bg-brand-gray-mid border-white/15 text-white/40 cursor-not-allowed",
-    success: "bg-transparent border-green-400 text-green-400 cursor-not-allowed",
-  };
 
   return (
     <button
-      onClick={handleClick}
+      type="button"
       disabled={disabled || state !== "idle"}
+      onClick={() => {
+        if (!disabled && state === "idle") {
+          setState("loading");
+        }
+      }}
       className={[
-        "group w-full py-4 flex items-center justify-center gap-2.5 font-heading text-[1rem] font-bold tracking-[0.18em] uppercase border-2 transition-all duration-300 relative overflow-hidden",
-        disabled && state === "idle" ? "bg-brand-gray-mid border-white/15 text-white/40 cursor-not-allowed" : styles[state],
+        "flex w-full items-center justify-center gap-2 rounded-full py-4 font-heading size-action font-semibold uppercase tracking-[0.18em] transition-colors",
+        disabled
+          ? "bg-[#dfe3ea] text-[#99a2b0]"
+          : state === "success"
+            ? "bg-[#1f9d61] text-white"
+            : state === "loading"
+              ? "bg-store-blue-soft text-store-blue"
+              : "bg-[#111111] text-white hover:bg-store-blue",
       ].join(" ")}
     >
-      {state === "idle" && !disabled ? (
-        <span className="absolute inset-0 bg-white scale-x-0 origin-right group-hover:scale-x-100 group-hover:origin-left transition-transform duration-350 z-0" />
-      ) : null}
-      <span className="relative z-10 flex items-center gap-2.5">
-        {state === "idle" ? (
-          <>{disabled ? "Hết hàng hoặc chưa chọn size" : <><IconCart className="w-[18px] h-[18px]" />Thêm vào giỏ hàng</>}</>
-        ) : state === "loading" ? (
-          <><Spinner />Đang thêm...</>
-        ) : (
-          <><IconCheck />Đã thêm vào giỏ</>
-        )}
-      </span>
+      {state === "success" ? <Check className="h-4 w-4" /> : <ShoppingBag className="h-4 w-4" />}
+      {state === "success"
+        ? "Đã thêm vào giỏ"
+        : state === "loading"
+          ? "Đang thêm..."
+          : "Thêm vào giỏ"}
     </button>
   );
 }
 
-// ─── RelatedProducts ──────────────────────────────────────────────────────────
-function RelatedProducts({ products }: { products: Product[] }) {
-  const { addItem } = useCart();
-  const [addedIds, setAddedIds] = useState<number[]>([]);
-  const timeoutsRef = useRef<Map<number, number>>(new Map());
-
-  useEffect(() => {
-    const timeouts = timeoutsRef.current;
-    return () => timeouts.forEach((id) => window.clearTimeout(id));
-  }, []);
-
-  const handleQuickAdd = (event: React.MouseEvent, product: Product) => {
-    event.preventDefault();
-    event.stopPropagation();
-    const defaultSize = getDefaultSize(product);
-    if (!defaultSize) return;
-    const existingId = timeoutsRef.current.get(product.id);
-    if (existingId !== undefined) window.clearTimeout(existingId);
-    addItem(buildCartItem(product, product.colors[0], defaultSize));
-    setAddedIds((current) => [...current, product.id]);
-    const timeoutId = window.setTimeout(() => {
-      setAddedIds((current) => current.filter((id) => id !== product.id));
-      timeoutsRef.current.delete(product.id);
-    }, 1800);
-    timeoutsRef.current.set(product.id, timeoutId);
-  };
-
-  const perkLabels = BRAND_PERKS.map((perk) => perk.title).join(" · ");
+function ColorSelector({
+  product,
+  selectedColorIndex,
+  selectedColorName,
+  onSelect,
+  compact = false,
+}: {
+  product: Product;
+  selectedColorIndex: number;
+  selectedColorName: string;
+  onSelect: (index: number) => void;
+  compact?: boolean;
+}) {
+  if (compact) {
+    return (
+      <div className="flex items-center gap-2 overflow-x-auto pb-1">
+        {product.colors.map((color, index) => (
+          <button
+            key={color.name}
+            type="button"
+            aria-label={`Chọn màu ${color.name}`}
+            onClick={() => onSelect(index)}
+            className={[
+              "flex h-10 w-10 items-center justify-center rounded-full border bg-white transition-colors",
+              index === selectedColorIndex
+                ? "border-store-blue shadow-[0_0_0_3px_rgba(36,71,249,0.12)]"
+                : "border-[var(--border)]",
+            ].join(" ")}
+          >
+            <span
+              className="block h-7 w-7 rounded-full border border-black/10"
+              style={{ backgroundColor: color.hex }}
+            />
+          </button>
+        ))}
+      </div>
+    );
+  }
 
   return (
-    <section className="px-5 md:px-8 py-16 bg-brand-gray-dark border-t border-white/[0.06]">
-      <div className="flex items-end justify-between mb-8 gap-4">
-        <div>
-          <h2 className="font-display leading-[0.95] tracking-wide" style={{ fontSize: "clamp(1.8rem,4vw,2.5rem)" }}>
-            SẢN PHẨM <span className="text-gold-500">LIÊN QUAN</span>
-          </h2>
-          <p className="text-white/35 text-sm mt-2">{perkLabels}</p>
+    <div>
+      <div className="flex items-center justify-between gap-3">
+        <p className="font-heading size-label font-semibold uppercase tracking-[0.22em] text-store-muted">
+          Màu sắc
+        </p>
+        <p className="text-sm text-[#111111]">{selectedColorName}</p>
+      </div>
+      <div className="mt-4 flex flex-wrap gap-3">
+        {product.colors.map((color, index) => (
+          <button
+            key={color.name}
+            type="button"
+            onClick={() => onSelect(index)}
+            className={[
+              "flex items-center gap-3 rounded-full border px-3 py-2 pr-4 transition-colors",
+              index === selectedColorIndex
+                ? "border-store-blue bg-store-blue-soft"
+                : "border-[var(--border)] bg-white hover:border-store-blue",
+            ].join(" ")}
+          >
+            <span
+              className="block h-8 w-8 rounded-full border border-black/10"
+              style={{ backgroundColor: color.hex }}
+            />
+            <span className="font-heading size-label font-semibold uppercase tracking-[0.16em] text-[#111111]">
+              {color.name}
+            </span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function SizeSelector({
+  sizes,
+  selectedSize,
+  onSelect,
+  onOpenGuide,
+  compact = false,
+}: {
+  sizes: Product["sizes"];
+  selectedSize: ProductSize | null;
+  onSelect: (size: ProductSize) => void;
+  onOpenGuide: () => void;
+  compact?: boolean;
+}) {
+  if (compact) {
+    return (
+      <div className="flex items-center gap-2 overflow-x-auto pb-1">
+        {sizes.map((size) => (
+          <button
+            key={size.size}
+            type="button"
+            disabled={!size.available}
+            onClick={() => size.available && onSelect(size.size)}
+            className={[
+              "min-w-10 rounded-full border px-3 py-2 font-heading size-kicker font-semibold uppercase tracking-[0.16em] transition-colors",
+              !size.available
+                ? "cursor-not-allowed border-[var(--border)] text-[#c0c6cf] line-through"
+                : selectedSize === size.size
+                  ? "border-[#111111] bg-[#111111] text-white"
+                  : "border-[var(--border)] bg-[var(--surface)] text-store-muted hover:border-store-blue hover:text-store-blue",
+            ].join(" ")}
+          >
+            {size.size}
+          </button>
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-6">
+      <div className="flex items-center justify-between gap-3">
+        <p className="font-heading size-label font-semibold uppercase tracking-[0.22em] text-store-muted">
+          Kích thước
+        </p>
+        <button
+          type="button"
+          onClick={onOpenGuide}
+          className="inline-flex items-center gap-2 text-sm text-store-blue transition-colors hover:text-[#1737d3]"
+        >
+          <Ruler className="h-4 w-4" />
+          Hướng dẫn chọn size
+        </button>
+      </div>
+      <div className="mt-4 flex flex-wrap gap-2">
+        {sizes.map((size) => (
+          <button
+            key={size.size}
+            type="button"
+            disabled={!size.available}
+            onClick={() => size.available && onSelect(size.size)}
+            className={[
+              "min-w-12 rounded-full border px-4 py-2.5 font-heading size-label font-semibold uppercase tracking-[0.18em] transition-colors",
+              !size.available
+                ? "cursor-not-allowed border-[var(--border)] text-[#c0c6cf] line-through"
+                : selectedSize === size.size
+                  ? "border-[#111111] bg-[#111111] text-white"
+                  : "border-[var(--border)] bg-[var(--surface)] text-store-muted hover:border-store-blue hover:text-store-blue",
+            ].join(" ")}
+          >
+            {size.size}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function PurchasePanel({
+  product,
+  selectedColorIndex,
+  selectedColor,
+  selectedSize,
+  quantity,
+  colorStock,
+  onSelectColor,
+  onSelectSize,
+  onQuantityChange,
+  onOpenGuide,
+  onAdd,
+  className,
+  showHeader = true,
+  showPrice = false,
+  addToCartId,
+}: {
+  product: Product;
+  selectedColorIndex: number;
+  selectedColor: ProductColor;
+  selectedSize: ProductSize | null;
+  quantity: number;
+  colorStock: number;
+  onSelectColor: (index: number) => void;
+  onSelectSize: (size: ProductSize) => void;
+  onQuantityChange: (quantity: number) => void;
+  onOpenGuide: () => void;
+  onAdd: () => void;
+  className?: string;
+  showHeader?: boolean;
+  showPrice?: boolean;
+  addToCartId?: string;
+}) {
+  return (
+    <div className={["rounded-[36px] border border-[var(--border)] bg-white p-6 sm:p-7", className].join(" ")}>
+      {showHeader ? (
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <p className="font-heading size-kicker font-semibold uppercase tracking-[0.24em] text-store-blue">
+              Chọn phiên bản
+            </p>
+            <h2 className="mt-2 font-heading type-vn-title size-title-md font-semibold uppercase text-[#111111]">
+              Màu, size và số lượng
+            </h2>
+          </div>
+
+          {showPrice ? (
+            <div className="text-right">
+              <p className="font-heading size-price font-semibold leading-none text-[#111111]">
+                {formatVnd(product.price)}
+              </p>
+              {product.oldPrice ? (
+                <p className="mt-2 text-sm text-store-muted line-through">
+                  {formatVnd(product.oldPrice)}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
         </div>
-        <Link href="/collection" className="font-heading text-[0.75rem] tracking-[0.15em] uppercase text-white/40 hover:text-gold-500 no-underline border-b border-white/20 hover:border-gold-500 pb-px transition-all duration-200">
-          Xem tất cả →
-        </Link>
+      ) : null}
+
+      <div className={showHeader ? "mt-6" : ""}>
+        <ColorSelector
+          product={product}
+          selectedColorIndex={selectedColorIndex}
+          selectedColorName={selectedColor.name}
+          onSelect={onSelectColor}
+        />
+        <SizeSelector
+          sizes={product.sizes}
+          selectedSize={selectedSize}
+          onSelect={onSelectSize}
+          onOpenGuide={onOpenGuide}
+        />
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-px">
-        {products.map((product) => {
-          const added = addedIds.includes(product.id);
-          return (
-            <div key={product.id} className="group relative overflow-hidden bg-brand-gray-mid aspect-[3/4]">
-              <Link href={`/product/${product.id}`} aria-label={`Xem ${product.name}`} className="absolute inset-0 z-10" />
+      <div className="mt-6 flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <p className="font-heading size-label font-semibold uppercase tracking-[0.22em] text-store-muted">
+            Số lượng
+          </p>
+          <div className="mt-3">
+            <QuantitySelector
+              quantity={quantity}
+              max={Math.max(1, colorStock)}
+              onChange={onQuantityChange}
+            />
+          </div>
+        </div>
+
+        <div className="rounded-[24px] bg-[var(--surface)] px-5 py-4">
+          <p className="font-heading size-kicker-xs font-semibold uppercase tracking-[0.2em] text-store-muted">
+            Tồn kho
+          </p>
+          <p className="mt-2 text-sm text-[#111111]">
+            {colorStock > 0 ? (
+              <>
+                Còn <span className="font-semibold">{colorStock}</span> sản phẩm
+              </>
+            ) : (
+              "Tạm hết hàng"
+            )}
+          </p>
+        </div>
+      </div>
+
+      <div id={addToCartId} className="mt-6">
+        <AddToCartButton disabled={!selectedSize || colorStock <= 0} onAdd={onAdd} />
+      </div>
+    </div>
+  );
+}
+
+function StickyPurchaseBar({
+  visible,
+  product,
+  selectedColorIndex,
+  selectedColor,
+  selectedSize,
+  colorStock,
+  onSelectColor,
+  onSelectSize,
+  onAdd,
+}: {
+  visible: boolean;
+  product: Product;
+  selectedColorIndex: number;
+  selectedColor: ProductColor;
+  selectedSize: ProductSize | null;
+  colorStock: number;
+  onSelectColor: (index: number) => void;
+  onSelectSize: (size: ProductSize) => void;
+  onAdd: () => void;
+}) {
+  return (
+    <div
+      className={[
+        "fixed inset-x-0 top-0 z-[60] border-b border-[var(--border)] bg-white/97 shadow-[0_4px_20px_rgba(17,17,17,0.08)] backdrop-blur-md transition-all duration-300",
+        visible ? "translate-y-0 opacity-100" : "pointer-events-none -translate-y-full opacity-0",
+      ].join(" ")}
+    >
+      <div className="mx-auto max-w-[1240px] px-4 sm:px-6 lg:px-8">
+
+        {/* ── Mobile: 1 row ── */}
+        <div className="flex items-center gap-3 py-2 md:hidden">
+          <div className="shrink-0 overflow-hidden rounded-[12px] border border-[var(--border)] bg-[var(--surface)]">
+            <div className="h-[48px] w-[38px]">
               <ProductMedia
                 image={product.images[0]}
-                bgClass={product.colors[0].bgClass}
-                className="h-full w-full flex items-center justify-center transition-transform duration-700 group-hover:scale-105"
+                bgClass={selectedColor.bgClass}
+                className="h-full w-full"
                 imageClassName="h-full w-full object-cover"
-                svgClassName="h-16 w-16"
-                stroke="rgba(245,168,0,0.12)"
+                svgClassName="h-8 w-8 opacity-15"
+                stroke="rgba(0,0,0,0.08)"
               />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/10 to-transparent" />
-              {product.tag ? (
-                <div className="absolute top-3 left-3 font-heading text-[0.6rem] font-bold tracking-[0.15em] uppercase px-2 py-0.5 bg-gold-500 text-brand-black z-20">
-                  {product.tag}
-                </div>
-              ) : null}
-              <div className="absolute bottom-0 left-0 right-0 p-3.5 transition-transform duration-400 group-hover:-translate-y-1.5 z-20">
-                <p className="font-heading text-[0.9rem] font-bold uppercase tracking-wide mb-0.5">{product.name}</p>
-                <div className="flex items-center justify-between">
-                  <span className="font-display text-[1.15rem] text-gold-500">{formatCompactPrice(product.price)}</span>
-                  <button
-                    onClick={(event) => handleQuickAdd(event, product)}
-                    className={["w-[30px] h-[30px] flex items-center justify-center border-none cursor-pointer transition-all duration-200 relative z-20", "scale-0 group-hover:scale-100", added ? "bg-white text-brand-black" : "bg-gold-500 text-brand-black"].join(" ")}
-                  >
-                    {added ? <IconCheck /> : <IconPlus />}
-                  </button>
-                </div>
+            </div>
+          </div>
+
+          <div className="min-w-0 flex-1">
+            <p className="truncate font-heading size-action font-semibold uppercase tracking-[0.05em] text-[#111111]">
+              {product.name}
+            </p>
+            <p className="mt-0.5 text-xs text-store-muted">
+              {formatVnd(product.price)}
+              {selectedColor.name ? ` · ${selectedColor.name}` : ""}
+              {selectedSize ? ` · ${selectedSize}` : ""}
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={onAdd}
+            disabled={!selectedSize || colorStock <= 0}
+            className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full bg-[#111111] px-4 py-2.5 font-heading size-kicker font-semibold uppercase tracking-[0.1em] text-white transition-colors hover:bg-store-blue disabled:bg-[#dfe3ea] disabled:text-[#99a2b0]"
+          >
+            <ShoppingBag className="h-3.5 w-3.5" />
+            Thêm vào giỏ
+          </button>
+        </div>
+
+        {/* ── Desktop: 1 row gọn ── */}
+        <div className="hidden items-center gap-4 py-2 md:flex">
+          {/* Thumbnail + tên + giá */}
+          <div className="flex w-[220px] shrink-0 items-center gap-3">
+            <div className="shrink-0 overflow-hidden rounded-[12px] border border-[var(--border)] bg-[var(--surface)]">
+              <div className="h-[52px] w-[42px]">
+                <ProductMedia
+                  image={product.images[0]}
+                  bgClass={selectedColor.bgClass}
+                  className="h-full w-full"
+                  imageClassName="h-full w-full object-cover"
+                  svgClassName="h-8 w-8 opacity-15"
+                  stroke="rgba(0,0,0,0.08)"
+                />
               </div>
             </div>
-          );
-        })}
+            <div className="min-w-0">
+              <p className="truncate font-heading size-action font-semibold uppercase tracking-[0.05em] text-[#111111]">
+                {product.name}
+              </p>
+              <p className="font-heading size-title-xs font-semibold leading-tight text-[#111111]">
+                {formatVnd(product.price)}
+              </p>
+            </div>
+          </div>
+
+          {/* Màu + Size inline, không label */}
+          <div className="flex min-w-0 flex-1 items-center gap-3 overflow-x-auto">
+            <ColorSelector
+              product={product}
+              selectedColorIndex={selectedColorIndex}
+              selectedColorName={selectedColor.name}
+              onSelect={onSelectColor}
+              compact
+            />
+            <div className="h-4 w-px shrink-0 bg-[var(--border)]" />
+            <SizeSelector
+              sizes={product.sizes}
+              selectedSize={selectedSize}
+              onSelect={onSelectSize}
+              onOpenGuide={() => {}}
+              compact
+            />
+          </div>
+
+          {/* Nút thêm */}
+          <div className="w-[200px] shrink-0">
+            <AddToCartButton disabled={!selectedSize || colorStock <= 0} onAdd={onAdd} />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function RelatedProducts({ products }: { products: Product[] }) {
+  return (
+    <section className="border-t border-[var(--border)] bg-white">
+      <div className="mx-auto max-w-[1240px] px-4 py-10 sm:px-6 lg:px-8 lg:py-14">
+        <div className="flex items-end justify-between gap-4">
+          <div>
+            <p className="font-heading size-kicker font-semibold uppercase tracking-[0.28em] text-store-blue">
+              Gợi ý thêm
+            </p>
+            <h2 className="mt-3 max-w-[16ch] font-heading type-vn-title size-title-lg font-semibold uppercase text-[#111111] sm:size-display-sm">
+              Phối thêm vài món để hoàn thiện outfit.
+            </h2>
+          </div>
+          <Link
+            href="/collection"
+            className="hidden rounded-full border border-[var(--border)] px-5 py-3 font-heading size-label font-semibold uppercase tracking-[0.16em] text-[#111111] no-underline transition-colors hover:border-store-blue hover:text-store-blue sm:inline-flex"
+          >
+            Xem tất cả
+          </Link>
+        </div>
+
+        <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          {products.map((product) => (
+            <StoreProductCard key={product.id} product={product} showSubtitle={false} />
+          ))}
+        </div>
       </div>
     </section>
   );
 }
 
-// ─── ProductDetailView (main export) ─────────────────────────────────────────
 export function ProductDetailView({
   product,
   relatedProducts,
@@ -553,161 +766,305 @@ export function ProductDetailView({
   const { addItem } = useCart();
   const [selectedColorIndex, setSelectedColorIndex] = useState(0);
   const [selectedSize, setSelectedSize] = useState<ProductSize | null>(getDefaultSize(product));
-  const [qty, setQty] = useState(1);
-  const [wished, setWished] = useState(false);
+  const [quantity, setQuantity] = useState(1);
   const [showSizeGuide, setShowSizeGuide] = useState(false);
+  const [descriptionOpen, setDescriptionOpen] = useState(true);
+  const [showStickyBar, setShowStickyBar] = useState(false);
 
-  const selectedColor = useMemo(() => product.colors[selectedColorIndex], [product.colors, selectedColorIndex]);
-  const selectedColorStock = selectedColor.stockCount ?? product.stockCount;
+  const selectedColor = useMemo(
+    () => product.colors[selectedColorIndex] ?? product.colors[0],
+    [product.colors, selectedColorIndex],
+  );
+
+  const colorStock = selectedColor.stockCount ?? product.stockCount;
+  const maxQuantity = Math.max(1, colorStock);
+  const safeQuantity = Math.min(quantity, maxQuantity);
 
   const galleryImages = useMemo(() => {
-    const selectedColorId = selectedColor.id;
-    if (!selectedColorId) return product.images;
-    const next = product.images.filter((img) => img.colorId == null || img.colorId === selectedColorId);
-    return next.length ? next : product.images;
+    if (!selectedColor.id) {
+      return product.images;
+    }
+
+    const matches = product.images.filter(
+      (image) => image.colorId == null || image.colorId === selectedColor.id,
+    );
+
+    return matches.length ? matches : product.images;
   }, [product.images, selectedColor.id]);
 
-  const discountPct = product.oldPrice
+  const discountPercent = product.oldPrice
     ? Math.round(((product.oldPrice - product.price) / product.oldPrice) * 100)
     : 0;
 
+  useEffect(() => {
+    const check = () => {
+      const isDesktop = window.innerWidth >= 1280;
+      const navbarHeight = window.innerWidth >= 768 ? 112 : 64;
+      const id = isDesktop ? "pdp-add-to-cart-desktop" : "pdp-add-to-cart-mobile";
+      const el = document.getElementById(id);
+      if (!el) return;
+      setShowStickyBar(el.getBoundingClientRect().bottom < navbarHeight);
+    };
+
+    check();
+    window.addEventListener("scroll", check, { passive: true });
+    window.addEventListener("resize", check, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", check);
+      window.removeEventListener("resize", check);
+    };
+  }, []);
+
+  const handleAddToCart = () => {
+    if (!selectedSize || colorStock <= 0) {
+      return;
+    }
+
+    addItem(buildCartItem(product, selectedColor, selectedSize, safeQuantity));
+  };
+
+  const handleSelectColor = (index: number) => {
+    setSelectedColorIndex(index);
+    setQuantity(1);
+  };
+
+  const handleQuantityChange = (nextQuantity: number) => {
+    setQuantity(Math.max(1, Math.min(nextQuantity, maxQuantity)));
+  };
+
   return (
-    <div className="bg-brand-black text-white font-body min-h-screen">
-      {/* Breadcrumb */}
-      <div className="px-5 md:px-8 py-2.5 border-b border-white/[0.06] flex items-center gap-2 font-heading text-[0.72rem] tracking-[0.15em] uppercase text-white/40">
-        <Link href="/" className="hover:text-gold-500 transition-colors no-underline text-white/40">Trang Chủ</Link>
-        <span className="text-white/15">/</span>
-        <Link href="/collection" className="hover:text-gold-500 transition-colors no-underline text-white/40">Bộ Sưu Tập</Link>
-        <span className="text-white/15">/</span>
-        <span className="text-gold-500">{product.name}</span>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2">
-        <ImageGallery
-          key={selectedColor.name}
-          images={galleryImages}
-          selectedColor={selectedColor}
-          tag={product.tag}
-        />
-
-        <div className="px-5 md:px-8 py-8 overflow-y-auto bg-brand-black">
-          <p className="flex items-center gap-2.5 font-heading text-[0.72rem] tracking-[0.25em] uppercase text-gold-500 font-bold mb-3">
-            <span className="w-6 h-0.5 bg-gold-500 inline-block" />
-            {product.category}
-          </p>
-
-          <h1 className="font-display leading-[0.92] tracking-wide mb-4" style={{ fontSize: "clamp(2rem,4vw,3.2rem)" }}>
-            {product.name}
-            <br />
-            <span className="text-gold-500">{product.subtitle}</span>
-          </h1>
-
-          <div className="flex items-center gap-3 mb-5">
-            <Stars rating={product.rating} />
-            <span className="font-heading text-[0.78rem] text-white/40 tracking-wide">
-              {product.rating} · {product.reviewCount} đánh giá
-            </span>
-          </div>
-
-          <div className="flex items-baseline gap-3 mb-6 pb-6 border-b border-white/[0.08]">
-            <span className="font-display text-[2.8rem] text-gold-500 leading-none">{formatCompactPrice(product.price)}</span>
-            {product.oldPrice ? (
-              <span className="font-heading text-[1.1rem] text-white/40 line-through">{formatCompactPrice(product.oldPrice)}</span>
-            ) : null}
-            {discountPct > 0 ? (
-              <span className="bg-red-400/15 border border-red-400/30 text-red-400 font-heading text-[0.7rem] font-bold tracking-widest uppercase px-2 py-0.5">
-                -{discountPct}%
-              </span>
-            ) : null}
-          </div>
-
-          {/* Specs */}
-          <div className="grid grid-cols-2 gap-1 mb-6 pb-6 border-b border-white/[0.08]">
-            {product.specs.map((spec) => (
-              <div key={spec.label} className="bg-brand-gray-mid px-3.5 py-2.5">
-                <p className="font-heading text-[0.65rem] tracking-[0.18em] uppercase text-white/40 font-bold mb-0.5">{spec.label}</p>
-                <p className="font-heading text-[0.9rem] font-bold tracking-wide text-white">{spec.value}</p>
-              </div>
-            ))}
-          </div>
-
-          {/* Màu sắc */}
-          <div className="mb-6 pb-6 border-b border-white/[0.08]">
-            <p className="font-heading text-[0.72rem] tracking-[0.2em] uppercase text-white/40 font-bold mb-3.5">
-              Màu Sắc — <span className="text-white font-bold">{selectedColor.name}</span>
-            </p>
-            <div className="flex gap-2">
-              {product.colors.map((color, index) => (
-                <button
-                  key={color.name}
-                  onClick={() => { setSelectedColorIndex(index); setQty(1); }}
-                  title={color.name}
-                  className={["relative w-8 h-8 border-2 transition-all duration-200 cursor-pointer", selectedColorIndex === index ? "border-gold-500" : "border-transparent hover:opacity-80"].join(" ")}
-                  style={{ backgroundColor: color.hex }}
-                >
-                  {selectedColorIndex === index ? <span className="absolute -inset-1.5 border-2 border-gold-500 pointer-events-none" /> : null}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Size selector */}
-          <div className="mb-6 pb-6 border-b border-white/[0.08]">
-            <SizeSelector
-              sizes={product.sizes}
-              selected={selectedSize}
-              onSelect={setSelectedSize}
-              onShowGuide={() => setShowSizeGuide(true)}
-            />
-          </div>
-
-          {/* Số lượng */}
-          <div className="flex items-center gap-5 mb-5">
-            <div>
-              <p className="font-heading text-[0.72rem] tracking-[0.2em] uppercase text-white/40 font-bold mb-2">Số Lượng</p>
-              <QtyControl qty={qty} onChange={setQty} max={Math.max(0, selectedColorStock)} />
-            </div>
-            <p className="font-heading text-[0.75rem] tracking-widest text-white/40 pt-5">
-              <span className="text-green-400 font-bold">Còn {Math.max(0, selectedColorStock)}</span>{" "}sản phẩm
-            </p>
-          </div>
-
-          {/* Actions */}
-          <div className="flex flex-col gap-2.5 mb-6">
-            <AddToCartButton
-              disabled={!selectedSize || selectedColorStock <= 0}
-              onAdd={() => {
-                if (!selectedSize || selectedColorStock <= 0) return;
-                addItem(buildCartItem(product, selectedColor, selectedSize, qty));
-              }}
-            />
-            <button
-              onClick={() => setWished((v) => !v)}
-              className={["w-full py-3.5 flex items-center justify-center gap-2 border font-heading text-[0.85rem] font-bold tracking-[0.12em] uppercase transition-all duration-200 bg-transparent cursor-pointer", wished ? "border-gold-500/35 text-gold-500" : "border-white/15 text-white/70 hover:border-gold-500/35 hover:text-gold-500"].join(" ")}
-            >
-              <IconHeart filled={wished} />
-              {wished ? "Đã yêu thích" : "Yêu thích"}
-            </button>
-          </div>
-
-          {/* Description */}
-          <div className="border-t border-white/[0.08] pt-6 mb-5">
-            <p className="text-[0.9rem] text-white/70 leading-relaxed font-light mb-5">{product.description}</p>
-            <ul className="space-y-2">
-              {product.features.map((feature) => (
-                <li key={feature} className="flex items-center gap-2.5 text-[0.85rem] text-white/70">
-                  <span className="w-1.5 h-1.5 bg-gold-500 flex-shrink-0" />
-                  {feature}
-                </li>
-              ))}
-            </ul>
+    <div className="bg-[var(--background)] pb-6 text-[#111111] lg:pb-10">
+      <section className="border-b border-[var(--border)] bg-white">
+        <div className="mx-auto max-w-[1240px] px-4 py-4 text-sm text-store-muted sm:px-6 lg:px-8">
+          <div className="flex flex-wrap items-center gap-2">
+            <Link href="/" className="no-underline transition-colors hover:text-store-blue">
+              Trang chủ
+            </Link>
+            <span>/</span>
+            <Link href="/collection" className="no-underline transition-colors hover:text-store-blue">
+              Bộ sưu tập
+            </Link>
+            <span>/</span>
+            <span className="text-[#111111]">{product.name}</span>
           </div>
         </div>
-      </div>
+      </section>
+
+      <section className="mx-auto max-w-[1240px] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
+        <div className="grid gap-6 xl:grid-cols-[minmax(0,1.08fr)_430px]">
+          <div className="space-y-5 xl:sticky xl:top-[132px] xl:self-start">
+            <ImageGallery
+              key={selectedColor.id ?? selectedColor.name}
+              images={galleryImages}
+              selectedColor={selectedColor}
+            />
+
+            <PurchasePanel
+              product={product}
+              selectedColorIndex={selectedColorIndex}
+              selectedColor={selectedColor}
+              selectedSize={selectedSize}
+              quantity={safeQuantity}
+              colorStock={colorStock}
+              onSelectColor={handleSelectColor}
+              onSelectSize={setSelectedSize}
+              onQuantityChange={handleQuantityChange}
+              onOpenGuide={() => setShowSizeGuide(true)}
+              onAdd={handleAddToCart}
+              showPrice
+              className="xl:hidden"
+              addToCartId="pdp-add-to-cart-mobile"
+            />
+          </div>
+
+          <div className="space-y-5">
+            <div className="rounded-[36px] border border-[var(--border)] bg-white p-6 sm:p-7">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div>
+                  <p className="font-heading size-kicker font-semibold uppercase tracking-[0.24em] text-store-blue">
+                    {CATEGORY_LABELS[product.category]}
+                  </p>
+                  <h1 className="mt-3 max-w-[13ch] font-heading type-vn-display size-display-sm font-semibold uppercase text-[#111111] sm:max-w-[14ch] sm:size-display-md">
+                    {product.name}
+                  </h1>
+            <p className="mt-3 max-w-[480px] size-copy-md text-store-muted">
+                    {product.subtitle}
+                  </p>
+                </div>
+
+                {product.tag ? (
+                  <div className="rounded-full bg-store-blue-soft px-4 py-2 font-heading size-kicker font-semibold uppercase tracking-[0.18em] text-store-blue">
+                    {product.tag}
+                  </div>
+                ) : null}
+              </div>
+
+              <div className="mt-5 flex flex-wrap items-center gap-3">
+                <RatingStars rating={product.rating} />
+                <div className="text-sm text-store-muted">
+                  {product.rating.toFixed(1)} · {product.reviewCount} đánh giá
+                </div>
+              </div>
+
+              <div className="mt-6 flex flex-wrap items-end gap-3">
+                <div className="font-heading size-display-sm font-semibold leading-none text-[#111111]">
+                  {formatVnd(product.price)}
+                </div>
+                {product.oldPrice ? (
+                  <div className="pb-1 text-base text-store-muted line-through">
+                    {formatVnd(product.oldPrice)}
+                  </div>
+                ) : null}
+                {discountPercent > 0 ? (
+                  <div className="rounded-full bg-[#111111] px-3 py-1.5 font-heading size-kicker font-semibold uppercase tracking-[0.18em] text-white">
+                    -{discountPercent}%
+                  </div>
+                ) : null}
+              </div>
+
+              <div className="mt-6 grid gap-3 sm:grid-cols-3">
+                {TRUST_ITEMS.map((item) => {
+                  const Icon = item.icon;
+                  return (
+                    <div key={item.title} className="rounded-[24px] bg-[var(--surface)] p-4">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white">
+                        <Icon className="h-4 w-4 text-store-blue" />
+                      </div>
+              <h2 className="mt-4 font-heading type-vn-compact size-title-xs font-semibold uppercase text-[#111111]">
+                        {item.title}
+                      </h2>
+                      <p className="mt-2 text-sm leading-6 text-store-muted">{item.text}</p>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            <PurchasePanel
+              product={product}
+              selectedColorIndex={selectedColorIndex}
+              selectedColor={selectedColor}
+              selectedSize={selectedSize}
+              quantity={safeQuantity}
+              colorStock={colorStock}
+              onSelectColor={handleSelectColor}
+              onSelectSize={setSelectedSize}
+              onQuantityChange={handleQuantityChange}
+              onOpenGuide={() => setShowSizeGuide(true)}
+              onAdd={handleAddToCart}
+              showHeader={false}
+              className="hidden xl:block"
+              addToCartId="pdp-add-to-cart-desktop"
+            />
+          </div>
+        </div>
+      </section>
+
+      <section className="mx-auto max-w-[1240px] px-4 pb-8 pt-2 sm:px-6 lg:px-8 lg:pb-14">
+        <div className="grid gap-6 lg:grid-cols-[1fr_420px]">
+          <div className="rounded-[36px] border border-[var(--border)] bg-white p-6 sm:p-7">
+            <button
+              type="button"
+              onClick={() => setDescriptionOpen((current) => !current)}
+              className="flex w-full items-center justify-between gap-4 text-left"
+            >
+              <div>
+                <p className="font-heading size-kicker font-semibold uppercase tracking-[0.24em] text-store-blue">
+                  Chi tiết sản phẩm
+                </p>
+                <h2 className="mt-2 font-heading type-vn-title size-title-md font-semibold uppercase text-[#111111]">
+                  Mô tả và thông số
+                </h2>
+              </div>
+              <ChevronDown
+                className={[
+                  "h-5 w-5 text-store-muted transition-transform",
+                  descriptionOpen ? "rotate-180" : "rotate-0",
+                ].join(" ")}
+              />
+            </button>
+
+            {descriptionOpen ? (
+              <div className="mt-6 grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
+                <div>
+                  <p className="size-copy-md whitespace-pre-line text-store-muted">
+                    {product.description}
+                  </p>
+                  <div className="mt-6 space-y-3">
+                    {product.features.map((feature) => (
+                      <div
+                        key={feature}
+                        className="flex items-start gap-3 rounded-[22px] bg-[var(--surface)] px-4 py-4"
+                      >
+                        <span className="mt-1 block h-2.5 w-2.5 rounded-full bg-store-blue" />
+                        <p className="text-sm leading-6 text-[#111111]">{feature}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="rounded-[28px] bg-[var(--surface)] p-5">
+                  <p className="font-heading size-kicker font-semibold uppercase tracking-[0.24em] text-store-muted">
+                    Thông số chính
+                  </p>
+                  <div className="mt-4 space-y-3">
+                    {product.specs.map((spec) => (
+                      <div
+                        key={spec.label}
+                        className="flex items-start justify-between gap-4 rounded-[20px] bg-white px-4 py-4"
+                      >
+                        <span className="text-sm text-store-muted">{spec.label}</span>
+                        <span className="text-right text-sm font-semibold text-[#111111]">
+                          {spec.value}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            ) : null}
+          </div>
+
+          <div className="rounded-[36px] border border-[var(--border)] bg-white p-6 sm:p-7">
+            <p className="font-heading size-kicker font-semibold uppercase tracking-[0.24em] text-store-blue">
+              Mua nhanh hơn
+            </p>
+            <h2 className="mt-2 font-heading type-vn-title size-title-md font-semibold uppercase text-[#111111]">
+              Những điểm cần biết
+            </h2>
+
+            <div className="mt-6 space-y-3">
+              {[
+                "Freeship toàn quốc cho đơn từ 500K, giao hoả tốc khu vực nội thành trong ngày.",
+                "Đổi size trong 30 ngày nếu không vừa — liên hệ hotline hoặc email để được hỗ trợ nhanh.",
+                "Thanh toán COD hoặc chuyển khoản, xác nhận đơn qua SMS ngay sau khi đặt.",
+              ].map((item) => (
+                <div
+                  key={item}
+                  className="rounded-[22px] bg-[var(--surface)] px-4 py-4 text-sm leading-6 text-[#111111]"
+                >
+                  {item}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
 
       <RelatedProducts products={relatedProducts} />
 
-      {/* Size guide modal */}
+      <StickyPurchaseBar
+        visible={showStickyBar}
+        product={product}
+        selectedColorIndex={selectedColorIndex}
+        selectedColor={selectedColor}
+        selectedSize={selectedSize}
+        colorStock={colorStock}
+        onSelectColor={handleSelectColor}
+        onSelectSize={setSelectedSize}
+        onAdd={handleAddToCart}
+      />
+
       {showSizeGuide ? <SizeGuideModal onClose={() => setShowSizeGuide(false)} /> : null}
     </div>
   );

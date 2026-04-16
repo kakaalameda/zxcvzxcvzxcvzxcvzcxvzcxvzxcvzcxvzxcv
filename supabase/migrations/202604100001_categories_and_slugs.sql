@@ -18,27 +18,35 @@ create table if not exists public.categories (
 create index if not exists categories_slug_idx on public.categories(slug);
 create index if not exists categories_parent_id_idx on public.categories(parent_id);
 
--- 2. Seed initial categories
+-- 2. Seed categories
+--    Hiện tại bán 2 dòng áo thun chính. Đồ mùa đông ẩn, sẵn sàng mở sau.
 insert into public.categories (slug, name, parent_id, sort_order, visible_frontend, meta_title, meta_description)
 values
-  ('ao-thun',    'Áo Thun',    null, 1, true,  'Áo Thun Streetwear | Nghe Hustle', 'Bộ sưu tập áo thun streetwear chính hãng từ Nghe Hustle. Thiết kế độc đáo, chất liệu cao cấp.'),
-  ('hoodie',     'Hoodie',     null, 2, true,  'Hoodie Streetwear | Nghe Hustle',  'Hoodie streetwear Nghe Hustle – form rộng, chất nặng, giữ ấm cả mùa đông.'),
-  ('ao-khoac',   'Áo Khoác',   null, 3, false, 'Áo Khoác | Nghe Hustle',          'Áo khoác streetwear từ Nghe Hustle – sắp ra mắt.'),
-  ('quan',       'Quần',       null, 4, true,  'Quần Streetwear | Nghe Hustle',    'Quần streetwear Nghe Hustle – cargo, jogger và các thiết kế độc quyền.'),
-  ('phu-kien',   'Phụ Kiện',   null, 5, false, 'Phụ Kiện | Nghe Hustle',          'Phụ kiện streetwear từ Nghe Hustle – sắp ra mắt.')
-on conflict (slug) do nothing;
+  -- Visible now
+  ('ao-thun-in-hinh',    'Áo Thun In Hình',    null, 1, true,
+   'Áo Thun In Hình Streetwear | Nghe Hustle',
+   'Bộ sưu tập áo thun in hình độc quyền từ Nghe Hustle – mỗi thiết kế là một câu chuyện.'),
 
--- Insert sub-category after parent exists
-insert into public.categories (slug, name, parent_id, sort_order, visible_frontend, meta_title, meta_description)
-values (
-  'ao-thun-in-hinh',
-  'Áo Thun In Hình',
-  (select id from public.categories where slug = 'ao-thun'),
-  1,
-  true,
-  'Áo Thun In Hình | Nghe Hustle',
-  'Áo thun in hình streetwear từ Nghe Hustle.'
-)
+  ('ao-thun-tron',       'Áo Thun Trơn',        null, 2, true,
+   'Áo Thun Trơn Streetwear | Nghe Hustle',
+   'Áo thun trơn chất lượng cao từ Nghe Hustle – basic nhưng không nhàm.'),
+
+  -- Hidden now, ready for winter expansion
+  ('hoodie',             'Hoodie',              null, 3, false,
+   'Hoodie Streetwear | Nghe Hustle',
+   'Hoodie streetwear Nghe Hustle – form rộng, chất nặng, giữ ấm cả mùa đông.'),
+
+  ('ao-khoac',           'Áo Khoác',            null, 4, false,
+   'Áo Khoác | Nghe Hustle',
+   'Áo khoác streetwear từ Nghe Hustle – sắp ra mắt.'),
+
+  ('quan',               'Quần',                null, 5, false,
+   'Quần Streetwear | Nghe Hustle',
+   'Quần streetwear Nghe Hustle – cargo, jogger và các thiết kế độc quyền.'),
+
+  ('phu-kien',           'Phụ Kiện',            null, 6, false,
+   'Phụ Kiện | Nghe Hustle',
+   'Phụ kiện streetwear từ Nghe Hustle – sắp ra mắt.')
 on conflict (slug) do nothing;
 
 -- 3. Add slug, category_id, is_active to products table
@@ -51,9 +59,7 @@ create index if not exists products_slug_idx on public.products(slug);
 create index if not exists products_category_id_idx on public.products(category_id);
 create index if not exists products_is_active_idx on public.products(is_active);
 
--- 4. Auto-generate slugs for existing products that don't have one yet
--- Uses ascii/unaccent-style approach — admin should set proper Vietnamese slugs manually
--- This just ensures slug is never NULL (uses id-based fallback)
+-- 4. Auto-generate slug fallback for existing products (admin nên đặt lại slug đúng sau)
 update public.products
 set slug = 'san-pham-' || id::text
 where slug is null;

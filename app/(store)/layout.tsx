@@ -13,7 +13,7 @@ export default async function StoreLayout({
   return (
     <>
       <Navbar />
-      <main className="min-h-screen pt-[76px]">{children}</main>
+      <main className="min-h-screen pt-16 md:pt-[112px]">{children}</main>
       <Footer />
       <CartDrawer vouchers={vouchers} />
     </>

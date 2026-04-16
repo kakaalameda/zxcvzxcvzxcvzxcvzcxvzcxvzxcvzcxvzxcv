@@ -1,45 +1,247 @@
 @import "tailwindcss";
 
 @theme {
-  /* Khai báo màu sắc cho Nghe Hustle */
-  --color-gold-500: #F5A800;
-  --color-brand-black: #0A0A0A;
+  --color-gold-500: #f5a800;
+  --color-brand-black: #0a0a0a;
   --color-brand-gray-dark: #111111;
-  --color-brand-gray-mid: #1A1A1A;
+  --color-brand-gray-mid: #1a1a1a;
+  --color-store-ink: #111111;
+  --color-store-surface: #f5f5f3;
+  --color-store-card: #ffffff;
+  --color-store-border: #e5e7eb;
+  --color-store-muted: #6b7280;
+  --color-store-blue: #2447f9;
+  --color-store-blue-soft: #eef2ff;
+  --color-store-slate: #30313a;
 
-  /* Khai báo Font chữ */
   --font-display: var(--font-bebas);
   --font-heading: var(--font-barlow-condensed);
   --font-body: var(--font-barlow);
+  --font-editorial: var(--font-noto-serif);
 
-  /* Định nghĩa các hiệu ứng chuyển động */
   @keyframes marquee {
-    from { transform: translateX(0); }
-    to { transform: translateX(-50%); }
+    from {
+      transform: translateX(0);
+    }
+    to {
+      transform: translateX(-50%);
+    }
   }
+
   --animate-marquee: marquee 20s linear infinite;
 
   @keyframes spin-slow {
-    from { transform: rotate(0deg); }
-    to { transform: rotate(360deg); }
+    from {
+      transform: rotate(0deg);
+    }
+    to {
+      transform: rotate(360deg);
+    }
   }
+
   --animate-spin-slow: spin-slow 8s linear infinite;
+
+  @keyframes rise-in {
+    from {
+      opacity: 0;
+      transform: translateY(18px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  --animate-rise-in: rise-in 500ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 :root {
-  --background: #0A0A0A;
-  --foreground: #ffffff;
+  --background: #f6f7f9;
+  --foreground: #111111;
+  --surface: #f5f5f3;
+  --surface-elevated: #ffffff;
+  --border: #e5e7eb;
+  --muted: #6b7280;
+  --accent: #2447f9;
+  --accent-soft: #eef2ff;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  min-height: 100%;
+  background: var(--background);
+  color: var(--foreground);
 }
 
 body {
-  background-color: var(--background);
+  min-height: 100%;
+  background: var(--background);
   color: var(--foreground);
   font-family: var(--font-body);
 }
 
-/* Fix lỗi hiển thị cho các lớp layer */
 @layer base {
-  * {
-    @apply border-white/10;
+  a {
+    color: inherit;
   }
+}
+
+@utility size-micro {
+  font-size: 0.62rem;
+  line-height: 0.875rem;
+}
+
+@utility size-kicker-xs {
+  font-size: 0.72rem;
+  line-height: 1rem;
+}
+
+@utility size-kicker {
+  font-size: 0.74rem;
+  line-height: 1rem;
+}
+
+@utility size-label {
+  font-size: 0.78rem;
+  line-height: 1rem;
+}
+
+@utility size-action {
+  font-size: 0.86rem;
+  line-height: 1rem;
+}
+
+@utility size-copy {
+  font-size: 0.95rem;
+  line-height: 1.5rem;
+}
+
+@utility size-copy-md {
+  font-size: 1rem;
+  line-height: 1.75rem;
+}
+
+@utility size-title-xs {
+  font-size: 1.05rem;
+  line-height: 1.24;
+}
+
+@utility size-title-base {
+  font-size: 1.14rem;
+  line-height: 1.22;
+}
+
+@utility size-title-sm {
+  font-size: 1.32rem;
+  line-height: 1.2;
+}
+
+@utility size-title-md {
+  font-size: 1.48rem;
+  line-height: 1.16;
+}
+
+@utility size-title-lg {
+  font-size: 1.82rem;
+  line-height: 1.08;
+}
+
+@utility size-price {
+  font-size: 1.72rem;
+  line-height: 1;
+}
+
+@utility size-display-sm {
+  font-size: 2.08rem;
+  line-height: 1;
+}
+
+@utility size-display-md {
+  font-size: 2.38rem;
+  line-height: 0.98;
+}
+
+@utility type-vn-compact {
+  text-wrap: pretty;
+  line-height: 1.22;
+  letter-spacing: 0.02em;
+}
+
+@utility type-vn-title {
+  text-wrap: balance;
+  line-height: 1.18;
+  letter-spacing: 0.012em;
+}
+
+@utility type-vn-display {
+  text-wrap: balance;
+  line-height: 1.14;
+  letter-spacing: 0.008em;
+}
+
+@media (max-width: 639px) {
+  .size-title-sm {
+    font-size: 1.22rem;
+    line-height: 1.22;
+  }
+
+  .size-title-md {
+    font-size: 1.34rem;
+    line-height: 1.18;
+  }
+
+  .size-title-lg {
+    font-size: 1.56rem;
+    line-height: 1.12;
+  }
+
+  .size-display-sm {
+    font-size: 1.78rem;
+    line-height: 1.04;
+  }
+
+  .size-display-md {
+    font-size: 2.02rem;
+    line-height: 1.02;
+  }
+}
+
+@media (min-width: 640px) {
+  .type-vn-compact {
+    line-height: 1.18;
+    letter-spacing: 0.018em;
+  }
+
+  .type-vn-title {
+    line-height: 1.14;
+    letter-spacing: 0.015em;
+  }
+
+  .type-vn-display {
+    line-height: 1.08;
+    letter-spacing: 0.01em;
+  }
+}
+
+::selection {
+  background: var(--accent);
+  color: white;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: #eceef2;
+}
+
+::-webkit-scrollbar-thumb {
+  border: 2px solid #eceef2;
+  border-radius: 999px;
+  background: #c7ccd4;
 }

@@ -97,6 +97,8 @@ export interface NewCartItem {
   qty: number;
   tag?: string;
   bgClass: string;
+  iconPath: string;
+  imageUrl?: string;
   colorName?: string;
   size?: ProductSize;
 }
@@ -132,24 +134,23 @@ const PANTS_ICON =
   "M5 2h14l-2 20h-4l-1-10-1 10H7L5 2z";
 
 export const SITE_NAV_LINKS: NavLink[] = [
-  { href: "/", label: "Trang Chủ" },
-  { href: "/collection", label: "Bộ Sưu Tập" },
+  { href: "/collection", label: "Sản phẩm" },
   { href: "/lookbook", label: "Lookbook" },
-  { href: "/about", label: "Về Nghe Hustle" },
-  { href: "/track-order", label: "Track Order" },
+  { href: "/about", label: "Về chúng tôi" },
+  { href: "/track-order", label: "Tra đơn" },
 ];
 
 export const BRAND_STATS: BrandStat[] = [
-  { num: "500+", label: "Sản Phẩm" },
-  { num: "10K+", label: "Khách Hàng" },
-  { num: "100%", label: "Việt Nam" },
+  { num: "500+", label: "Mẫu đang mở bán" },
+  { num: "10K+", label: "Khách hàng đã mua" },
+  { num: "100%", label: "Hoàn thiện tại Việt Nam" },
 ];
 
 export const BRAND_PERKS: BrandPerk[] = [
-  { title: "Free Ship", text: "Toàn quốc từ 500K" },
-  { title: "Đổi Trả", text: "Hỗ trợ trong 30 ngày" },
-  { title: "Xử Lý Nhanh", text: "Đóng gói trong 24h" },
-  { title: "Made Local", text: "Thiết kế và hoàn thiện tại Việt Nam" },
+  { title: "Miễn phí giao hàng", text: "Áp dụng cho đơn từ 500K toàn quốc" },
+  { title: "Đổi trả dễ dàng", text: "Hỗ trợ trong 30 ngày nếu cần đổi size" },
+  { title: "Đóng gói nhanh", text: "Xử lý và bàn giao đơn trong 24h" },
+  { title: "Làm tại Việt Nam", text: "Thiết kế và hoàn thiện trong nước" },
 ];
 
 export const MARQUEE_ITEMS = [
@@ -207,16 +208,16 @@ export const LOOKBOOK_SECTIONS: LookbookSection[] = [
 
 export const ABOUT_VALUES: AboutValue[] = [
   {
-    title: "Street First",
-    text: "Nghe Hustle bắt đầu từ quan sát nhịp sống thật, không xây brand theo moodboard vay mượn.",
+    title: "Tinh thần đường phố",
+    text: "Nghe Hustle bắt đầu từ nhịp sống thật, từ cách con người mặc đồ mỗi ngày thay vì chạy theo hình ảnh vay mượn.",
   },
   {
-    title: "Material Matters",
-    text: "Chất liệu, định lượng vải và độ bền hoàn thiện là thứ quyết định việc khách có mặc lại món đồ đó hay không.",
+    title: "Chất liệu đáng tin",
+    text: "Chất liệu, định lượng vải và độ bền hoàn thiện là điều quyết định một món đồ có được mặc lại lâu dài hay không.",
   },
   {
-    title: "Build Slow",
-    text: "Thương hiệu này ưu tiên drop gọn, nói ít, làm chắc và để sản phẩm tự lên tiếng.",
+    title: "Làm ít nhưng làm chắc",
+    text: "Chúng tôi ưu tiên ra mắt gọn, kiểm soát chất lượng kỹ và để sản phẩm tự nói lên giá trị của mình.",
   },
 ];
 
@@ -670,6 +671,7 @@ export function buildCartItem(
   size: ProductSize,
   qty = 1,
 ): NewCartItem {
+  const primaryImage = product.images[0];
   return {
     key: makeCartItemKey(product.id, color.name, size),
     productId: product.id,
@@ -680,6 +682,8 @@ export function buildCartItem(
     qty,
     tag: product.tag,
     bgClass: color.bgClass,
+    iconPath: primaryImage.iconPath,
+    imageUrl: primaryImage.imageUrl,
     colorName: color.name,
     size,
   };

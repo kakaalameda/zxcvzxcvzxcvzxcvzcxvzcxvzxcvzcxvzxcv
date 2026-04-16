@@ -9,6 +9,30 @@ export type Json =
 export interface Database {
   public: {
     Tables: {
+      lookbook_sections: {
+        Row: {
+          id: number;
+          eyebrow: string;
+          title: string;
+          text: string;
+          product_id: number | null;
+          sort_order: number;
+          active: boolean;
+          created_at: string;
+        };
+        Insert: {
+          id?: number;
+          eyebrow?: string;
+          title: string;
+          text?: string;
+          product_id?: number | null;
+          sort_order?: number;
+          active?: boolean;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["lookbook_sections"]["Insert"]>;
+        Relationships: [];
+      };
       order_items: {
         Row: {
           id: number;

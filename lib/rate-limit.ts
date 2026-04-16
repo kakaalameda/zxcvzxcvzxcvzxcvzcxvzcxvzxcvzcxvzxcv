@@ -19,16 +19,10 @@ const TRACK_ORDER_RATE_LIMIT = {
   window: "10 m" as const,
 } as const;
 
-const CHECKOUT_ADDRESS_RATE_LIMIT = {
-  requests: 12,
-  window: "10 m" as const,
-} as const;
-
 const globalRateLimitStore = globalThis as typeof globalThis & {
   __brandWebUpstashRedis__?: Redis;
   __brandWebOrderRateLimit__?: Ratelimit;
   __brandWebTrackOrderRateLimit__?: Ratelimit;
-  __brandWebCheckoutAddressRateLimit__?: Ratelimit;
   __brandWebUpstashRateLimitWarningShown__?: boolean;
 };
 
@@ -76,8 +70,7 @@ function getRedisClient() {
 function getOrCreateRateLimiter(args: {
   cacheKey:
     | "__brandWebOrderRateLimit__"
-    | "__brandWebTrackOrderRateLimit__"
-    | "__brandWebCheckoutAddressRateLimit__";
+    | "__brandWebTrackOrderRateLimit__";
   config: { requests: number; window: "10 m" };
   prefix: string;
 }) {
@@ -169,15 +162,3 @@ export async function applyTrackOrderRateLimit(
   );
 }
 
-export async function applyCheckoutAddressRateLimit(
-  identifier: string,
-): Promise<RateLimitResult | null> {
-  return applyRateLimit(
-    getOrCreateRateLimiter({
-      cacheKey: "__brandWebCheckoutAddressRateLimit__",
-      config: CHECKOUT_ADDRESS_RATE_LIMIT,
-      prefix: "brand-web:checkout-address",
-    }),
-    identifier,
-  );
-}

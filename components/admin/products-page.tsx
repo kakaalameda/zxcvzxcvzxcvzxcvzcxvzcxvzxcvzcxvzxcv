@@ -4,7 +4,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import type { ColumnDef } from "@tanstack/react-table";
 import { Pencil, Plus, Search, Trash2, Upload } from "lucide-react";
-import { useMemo, useRef, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import {
   type FieldErrors,
   type UseFormReturn,
@@ -448,9 +448,8 @@ function SlugField({ form }: { form: AdminProductForm }) {
   // If editing an existing product that already has a slug, mark as touched so we don't overwrite
   const [touched, setTouched] = useState(() => Boolean(form.getValues("slug")));
 
-  // Auto-fill slug from name if user hasn't manually edited the slug yet
   const prevAuto = useRef<string>("");
-  useMemo(() => {
+  useEffect(() => {
     if (touched) return;
     const auto = watchedName ? toSlug(watchedName) : "";
     if (auto !== prevAuto.current) {
@@ -474,7 +473,7 @@ function SlugField({ form }: { form: AdminProductForm }) {
           onBlur={field.onBlur}
         />
         {!touched && watchedName && (
-          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[0.6rem] text-gold-500/60 uppercase tracking-widest pointer-events-none">
+          <span className="absolute right-3 top-1/2 -translate-y-1/2 size-micro text-gold-500/60 uppercase tracking-widest pointer-events-none">
             tự động
           </span>
         )}
@@ -578,8 +577,7 @@ export function ProductsPage({
     [watchedVariants],
   );
 
-  const columns = useMemo<ColumnDef<AdminProductRecord>[]>(
-    () => [
+  const columns: ColumnDef<AdminProductRecord>[] = [
       {
         id: "thumbnail",
         header: "",
@@ -607,7 +605,7 @@ export function ProductsPage({
             <div>
               <div className="flex items-center gap-2 flex-wrap">
                 <p className="font-medium text-foreground">{product.name}</p>
-                <span className={cn("inline-flex rounded-full px-2 py-0.5 text-[0.65rem] font-medium", status.className)}>
+                <span className={cn("inline-flex rounded-full px-2 py-0.5 size-micro font-medium", status.className)}>
                   {status.label}
                 </span>
               </div>
@@ -739,9 +737,7 @@ export function ProductsPage({
           );
         },
       },
-    ],
-    [editingProduct?.id, form],
-  );
+    ];
 
   const syncAssignedColorName = (
     previousColorName: PredefinedProductColorName,

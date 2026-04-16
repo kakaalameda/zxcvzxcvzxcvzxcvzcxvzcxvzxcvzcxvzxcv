@@ -1,6 +1,11 @@
 import { HomePage } from "@/components/home-page";
-import { getStoreFeaturedProducts } from "@/lib/repositories/storefront";
+import { getStoreFeaturedProducts, getStoreProducts } from "@/lib/repositories/storefront";
 
 export default async function Page() {
-  return <HomePage featuredProducts={await getStoreFeaturedProducts()} />;
+  const [featuredProducts, products] = await Promise.all([
+    getStoreFeaturedProducts(),
+    getStoreProducts(),
+  ]);
+
+  return <HomePage featuredProducts={featuredProducts} products={products} />;
 }

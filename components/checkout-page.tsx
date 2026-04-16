@@ -1,14 +1,23 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useEffectEvent, useRef, useState } from "react";
+import {
+  ArrowRight,
+  Check,
+  LoaderCircle,
+  QrCode,
+  ShieldCheck,
+  Sparkles,
+  WalletCards,
+} from "lucide-react";
+import { useState } from "react";
 import { CheckoutAddressSection } from "@/components/checkout-address-section";
 import { useCart, type CartItem } from "@/components/cart-context";
+import { ProductMedia } from "@/components/product-media";
 import { formatVnd, getShippingFee, type Voucher } from "@/lib/store";
 
 type PayMethod = "cod" | "qr";
 type OrderStatus = "idle" | "loading" | "success";
-type AddressSyncStatus = "idle" | "loading" | "success" | "warning" | "error";
 
 interface FormData {
   name: string;
@@ -23,17 +32,6 @@ interface FormData {
 
 type FormErrors = Partial<Record<keyof FormData, string>>;
 
-interface NormalizeAddressResult {
-  province: string;
-  district: string;
-  ward: string;
-  address: string;
-  hamlet: string | null;
-  changed: boolean;
-  deliverable?: boolean;
-  message: string;
-}
-
 const EMPTY_FORM: FormData = {
   name: "",
   phone: "",
@@ -45,73 +43,49 @@ const EMPTY_FORM: FormData = {
   note: "",
 };
 
-function buildAddressSignature(
-  form: Pick<FormData, "province" | "district" | "ward" | "address">,
-) {
-  return [form.province, form.district, form.ward, form.address]
-    .map((value) => value.trim())
-    .join("|")
-    .toLowerCase();
-}
-
-function canNormalizeAddress(form: Pick<FormData, "province" | "address">) {
-  return Boolean(form.province.trim() && form.address.trim());
-}
-
-function isSettledAddressSyncStatus(status: AddressSyncStatus) {
-  return status === "success" || status === "warning";
-}
-
 function Spinner() {
-  return (
-    <div className="h-[17px] w-[17px] rounded-full border-2 border-white/20 border-t-gold-500 animate-spin" />
-  );
-}
-
-function CheckIcon() {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2.5}
-      className="h-8 w-8"
-    >
-      <polyline points="20 6 9 17 4 12" />
-    </svg>
-  );
-}
-
-function ArrowIcon() {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2}
-      className="h-[17px] w-[17px]"
-    >
-      <path d="M5 12h14M12 5l7 7-7 7" />
-    </svg>
-  );
+  return <LoaderCircle className="h-4 w-4 animate-spin" />;
 }
 
 function CheckoutNav() {
   return (
-    <nav className="sticky top-0 z-40 border-b border-white/[0.08] bg-black/92 px-5 py-3.5 backdrop-blur-md md:px-8">
-      <div className="mx-auto flex max-w-[1120px] items-center justify-between">
-        <Link
-          href="/"
-          className="font-display text-[1.35rem] leading-none tracking-wide no-underline"
-        >
-          <span className="text-gold-500">NGHE </span>
-          <span className="text-white">HUSTLE</span>
+    <nav className="sticky top-0 z-40 border-b border-[var(--border)] bg-white/95 backdrop-blur">
+      <div className="mx-auto flex max-w-[1240px] items-center justify-between px-4 py-4 sm:px-6 lg:px-8">
+        <Link href="/" className="no-underline">
+          <p className="font-heading size-kicker-xs font-semibold uppercase tracking-[0.28em] text-store-muted">
+            Nghe
+          </p>
+          <p className="font-display text-[1.7rem] tracking-[0.08em] text-[#111111]">
+            HUSTLE
+          </p>
         </Link>
-        <div className="font-heading text-[0.72rem] uppercase tracking-[0.16em] text-white/35">
-          Checkout
+        <div className="rounded-full bg-store-blue-soft px-4 py-2 font-heading size-kicker-xs font-semibold uppercase tracking-[0.18em] text-store-blue">
+          Thanh toán
         </div>
       </div>
     </nav>
+  );
+}
+
+function SectionCard({
+  eyebrow,
+  title,
+  children,
+}: {
+  eyebrow: string;
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="rounded-[32px] border border-[var(--border)] bg-white p-5 sm:p-6">
+      <p className="font-heading size-kicker-xs font-semibold uppercase tracking-[0.22em] text-store-blue">
+        {eyebrow}
+      </p>
+      <h2 className="mt-2 max-w-[16ch] font-heading type-vn-title size-title-sm font-semibold uppercase text-[#111111]">
+        {title}
+      </h2>
+      <div className="mt-5">{children}</div>
+    </section>
   );
 }
 
@@ -126,23 +100,17 @@ function FormInput({
 }) {
   return (
     <div className={className}>
-      <label className="mb-1.5 block font-heading text-[0.72rem] font-bold uppercase tracking-[0.18em] text-white/40">
+      <label className="mb-1.5 block font-heading size-kicker-xs font-semibold uppercase tracking-[0.18em] text-store-muted">
         {label}
       </label>
       <input
         {...props}
         className={[
-          "w-full border bg-brand-gray-mid px-3.5 py-3 font-heading text-[0.92rem] tracking-wide text-white outline-none transition-colors duration-200 placeholder:text-white/30",
-          error
-            ? "border-red-400/70 focus:border-red-400"
-            : "border-white/15 focus:border-gold-500/40",
+          "w-full rounded-[22px] border bg-white px-4 py-3.5 size-copy text-[#111111] outline-none transition-colors placeholder:text-store-muted/70",
+          error ? "border-red-400 focus:border-red-400" : "border-[var(--border)] focus:border-store-blue",
         ].join(" ")}
       />
-      {error ? (
-        <p className="mt-1 font-heading text-[0.68rem] tracking-wide text-red-400">
-          {error}
-        </p>
-      ) : null}
+      {error ? <p className="mt-1.5 text-sm text-red-500">{error}</p> : null}
     </div>
   );
 }
@@ -157,66 +125,74 @@ function PaymentSelector({
   const methods = [
     {
       id: "cod" as const,
-      label: "COD",
-      description: "Thanh toán khi nhận hàng",
+      label: "Thanh toán khi nhận hàng",
+      description: "Xác nhận đơn trước, thu tiền khi giao.",
+      icon: WalletCards,
     },
     {
       id: "qr" as const,
-      label: "Chuyển khoản",
-      description: "Quét QR và chuyển khoản trước",
+      label: "Chuyển khoản QR",
+      description: "Quét mã QR và thanh toán trước khi giao hàng.",
+      icon: QrCode,
     },
   ];
 
   return (
-    <div className="space-y-3">
-      <div className="grid gap-2 sm:grid-cols-2">
-        {methods.map((method) => (
-          <button
-            key={method.id}
-            type="button"
-            onClick={() => onChange(method.id)}
-            className={[
-              "border px-4 py-3 text-left transition-colors",
-              selected === method.id
-                ? "border-gold-500 bg-gold-500/10"
-                : "border-white/10 bg-brand-gray-dark hover:border-gold-500/30",
-            ].join(" ")}
-          >
-            <p className="font-heading text-[0.82rem] font-bold uppercase tracking-[0.16em] text-white">
-              {method.label}
-            </p>
-            <p className="mt-1 text-[0.76rem] text-white/45">
-              {method.description}
-            </p>
-          </button>
-        ))}
+    <div className="space-y-4">
+      <div className="grid gap-3 sm:grid-cols-2">
+        {methods.map((method) => {
+          const Icon = method.icon;
+          const active = selected === method.id;
+
+          return (
+            <button
+              key={method.id}
+              type="button"
+              onClick={() => onChange(method.id)}
+              className={[
+                "rounded-[24px] border p-4 text-left transition-colors",
+                active
+                  ? "border-store-blue bg-store-blue-soft"
+                  : "border-[var(--border)] bg-[var(--surface)] hover:border-store-blue/50",
+              ].join(" ")}
+            >
+              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white">
+                <Icon className={["h-5 w-5", active ? "text-store-blue" : "text-store-muted"].join(" ")} />
+              </div>
+              <p className="mt-4 max-w-[12ch] font-heading type-vn-compact size-title-xs font-semibold uppercase text-[#111111]">
+                {method.label}
+              </p>
+              <p className="mt-2 text-sm leading-6 text-store-muted">{method.description}</p>
+            </button>
+          );
+        })}
       </div>
 
       {selected === "qr" ? (
-        <div className="border border-gold-500/25 bg-brand-gray-dark p-4">
-          <p className="font-heading text-[0.72rem] font-bold uppercase tracking-[0.18em] text-gold-500">
-            Thanh toán QR
+        <div className="rounded-[28px] border border-[#d9e1ff] bg-store-blue-soft p-5">
+          <p className="font-heading size-kicker-xs font-semibold uppercase tracking-[0.18em] text-store-blue">
+            Thông tin chuyển khoản
           </p>
-          <div className="mt-4 flex items-center gap-4">
-            <div className="flex h-[96px] w-[96px] items-center justify-center bg-white p-2">
+          <div className="mt-4 flex flex-col gap-4 sm:flex-row">
+            <div className="flex h-[110px] w-[110px] items-center justify-center rounded-[24px] bg-white p-4 shadow-sm">
               <div
-                className="h-full w-full"
+                className="h-full w-full rounded-xl"
                 style={{
                   backgroundImage:
-                    "repeating-linear-gradient(0deg,#000 0px,#000 4px,#fff 4px,#fff 8px),repeating-linear-gradient(90deg,#000 0px,#000 4px,#fff 4px,#fff 8px)",
+                    "repeating-linear-gradient(0deg,#111 0px,#111 4px,#fff 4px,#fff 8px),repeating-linear-gradient(90deg,#111 0px,#111 4px,#fff 4px,#fff 8px)",
                   backgroundBlendMode: "multiply",
                 }}
               />
             </div>
-            <div className="min-w-0">
-              <p className="font-heading text-[0.75rem] tracking-wide text-white/65">
+            <div>
+              <p className="font-heading size-label font-semibold uppercase tracking-[0.16em] text-[#111111]">
                 MB Bank · Nghe Hustle Official
               </p>
-              <p className="mt-1 font-heading text-[0.88rem] font-bold tracking-[0.14em] text-gold-500">
+              <p className="mt-2 font-heading size-title-base font-semibold uppercase tracking-[0.08em] text-store-blue">
                 1234 5678 9012 3456
               </p>
-              <p className="mt-1 text-[0.72rem] text-white/40">
-                Nội dung: NH + số điện thoại của bạn
+              <p className="mt-2 text-sm leading-6 text-store-muted">
+                Nội dung chuyển khoản: NH + số điện thoại đặt hàng.
               </p>
             </div>
           </div>
@@ -255,10 +231,10 @@ function VoucherInput({
 
   return (
     <div>
-      <p className="mb-2 font-heading text-[0.72rem] font-bold uppercase tracking-[0.18em] text-white/40">
+      <p className="font-heading size-kicker-xs font-semibold uppercase tracking-[0.18em] text-store-muted">
         Mã giảm giá
       </p>
-      <div className="flex gap-2">
+      <div className="mt-3 flex gap-2">
         <input
           value={code}
           maxLength={20}
@@ -269,23 +245,18 @@ function VoucherInput({
               applyVoucher();
             }
           }}
-          className="flex-1 border border-white/15 bg-brand-gray-mid px-3 py-2.5 font-heading text-[0.85rem] tracking-wide text-white outline-none transition-colors placeholder:text-white/30 focus:border-gold-500/35"
+          className="flex-1 rounded-full border border-[var(--border)] bg-white px-4 py-3 size-action text-[#111111] outline-none placeholder:text-store-muted/70 focus:border-store-blue"
         />
         <button
           type="button"
           onClick={applyVoucher}
-          className="border border-gold-500/35 px-4 font-heading text-[0.75rem] font-bold uppercase tracking-[0.18em] text-gold-500 transition-colors hover:bg-gold-500/10"
+          className="whitespace-nowrap rounded-full border border-store-blue px-5 py-3 font-heading size-label font-semibold uppercase tracking-[0.16em] text-store-blue transition-colors hover:bg-store-blue hover:text-white"
         >
           Áp dụng
         </button>
       </div>
       {message ? (
-        <p
-          className={[
-            "mt-2 font-heading text-[0.72rem] tracking-wide",
-            isSuccess ? "text-green-400" : "text-red-400",
-          ].join(" ")}
-        >
+        <p className={["mt-2 text-sm", isSuccess ? "text-green-600" : "text-red-500"].join(" ")}>
           {message}
         </p>
       ) : null}
@@ -295,21 +266,34 @@ function VoucherInput({
 
 function OrderItemRow({ item }: { item: CartItem }) {
   return (
-    <div className="flex items-start gap-3 border-b border-white/[0.08] py-3 last:border-b-0">
-      <div
-        className={`flex h-[64px] w-[56px] flex-shrink-0 items-center justify-center bg-gradient-to-br ${item.bgClass}`}
-      >
-        <span className="font-heading text-[0.72rem] font-bold tracking-[0.12em] text-gold-500">
+    <div className="flex items-start gap-3 rounded-[24px] border border-[var(--border)] bg-white p-3">
+      <div className="relative h-[76px] w-[64px] flex-shrink-0 overflow-hidden rounded-[16px]">
+        <ProductMedia
+          image={{
+            id: 0,
+            alt: item.name,
+            bgClass: item.bgClass,
+            iconPath: item.iconPath,
+            imageUrl: item.imageUrl,
+          }}
+          bgClass={item.bgClass}
+          className="h-full w-full"
+          imageClassName="h-full w-full object-cover"
+          svgClassName="h-8 w-8 opacity-25"
+          stroke="rgba(0,0,0,0.12)"
+          strokeWidth={0.8}
+        />
+        <span className="absolute bottom-1 right-1 rounded-full bg-[#111111]/85 px-1.5 py-0.5 font-heading size-micro font-semibold text-white">
           x{item.qty}
         </span>
       </div>
       <div className="min-w-0 flex-1">
-        <p className="truncate font-heading text-[0.84rem] font-bold uppercase tracking-[0.14em] text-white">
+        <p className="truncate font-heading size-action font-semibold uppercase tracking-[0.08em] text-[#111111]">
           {item.name}
         </p>
-        <p className="mt-1 text-[0.74rem] text-white/45">{item.sub}</p>
+        <p className="mt-1 text-sm text-store-muted">{item.sub}</p>
       </div>
-      <p className="font-display text-[1rem] text-gold-500">
+      <p className="font-heading size-title-xs font-semibold text-[#111111]">
         {formatVnd(item.price * item.qty)}
       </p>
     </div>
@@ -341,45 +325,50 @@ function OrderSummary({
   const total = subtotal - discountAmount + shippingFee;
 
   return (
-    <div className="border border-white/[0.08] bg-brand-gray-dark p-5 lg:sticky lg:top-24">
-      <p className="font-heading text-[0.72rem] font-bold uppercase tracking-[0.2em] text-gold-500">
-        Đơn hàng
+    <aside className="rounded-[32px] border border-[var(--border)] bg-white p-5 shadow-[0_24px_80px_rgba(17,17,17,0.06)] lg:sticky lg:top-[112px]">
+      <p className="font-heading size-kicker-xs font-semibold uppercase tracking-[0.22em] text-store-blue">
+        Đơn hàng của bạn
       </p>
+      <h2 className="mt-2 max-w-[15ch] font-heading type-vn-title size-title-md font-semibold uppercase text-[#111111]">
+        Tóm tắt đơn hàng
+      </h2>
 
-      <div className="mt-4">
+      <div className="mt-5 space-y-3">
         {items.map((item) => (
           <OrderItemRow key={item.key} item={item} />
         ))}
       </div>
 
-      <div className="mt-5 border-t border-white/[0.08] pt-5">
+      <div className="mt-5 rounded-[24px] bg-[var(--surface)] p-4">
         <VoucherInput vouchers={vouchers} onApply={onVoucherApply} />
       </div>
 
-      <div className="mt-5 space-y-2 border-t border-white/[0.08] pt-5 font-heading text-[0.84rem] tracking-wide">
-        <div className="flex items-center justify-between text-white/70">
+      <div className="mt-5 space-y-3 rounded-[24px] border border-[var(--border)] bg-[#fafbfc] p-4">
+        <div className="flex justify-between text-sm text-store-muted">
           <span>Tạm tính</span>
-          <span>{formatVnd(subtotal)}</span>
+          <span className="font-semibold text-[#111111]">{formatVnd(subtotal)}</span>
         </div>
         {discountPct > 0 ? (
-          <div className="flex items-center justify-between text-green-400">
+          <div className="flex justify-between text-sm text-green-600">
             <span>{discountLabel}</span>
             <span>-{formatVnd(discountAmount)}</span>
           </div>
         ) : null}
-        <div className="flex items-center justify-between text-white/70">
+        <div className="flex justify-between text-sm text-store-muted">
           <span>Phí ship</span>
-          <span>{shippingFee === 0 ? "Miễn phí" : formatVnd(shippingFee)}</span>
+          <span className="font-semibold text-[#111111]">
+            {shippingFee === 0 ? "Miễn phí" : formatVnd(shippingFee)}
+          </span>
         </div>
       </div>
 
-      <div className="mt-5 flex items-baseline justify-between border-t border-white/[0.08] pt-5">
-        <span className="font-heading text-[0.76rem] font-bold uppercase tracking-[0.18em] text-white/40">
+      <div className="mt-5">
+        <p className="font-heading size-kicker-xs font-semibold uppercase tracking-[0.22em] text-store-muted">
           Tổng cộng
-        </span>
-        <span className="font-display text-[1.8rem] leading-none text-gold-500">
+        </p>
+        <p className="mt-1 font-heading size-title-lg font-semibold text-[#111111]">
           {formatVnd(total)}
-        </span>
+        </p>
       </div>
 
       <button
@@ -387,77 +376,65 @@ function OrderSummary({
         onClick={onPlaceOrder}
         disabled={orderStatus !== "idle"}
         className={[
-          "mt-5 flex w-full items-center justify-center gap-2.5 border-2 py-4 font-heading text-[0.94rem] font-bold uppercase tracking-[0.2em] transition-colors",
+          "mt-5 flex w-full items-center justify-center gap-2 rounded-full py-4 font-heading size-action font-semibold uppercase tracking-[0.18em] transition-colors",
           orderStatus === "idle"
-            ? "border-gold-500 bg-gold-500 text-brand-black hover:bg-white hover:border-white"
+            ? "bg-[#111111] text-white hover:bg-store-blue"
             : orderStatus === "loading"
-              ? "border-white/10 bg-brand-gray-mid text-white/40"
-              : "border-green-400 text-green-400",
+              ? "bg-store-blue-soft text-store-blue"
+              : "bg-[#1f9d61] text-white",
         ].join(" ")}
       >
-        {orderStatus === "idle" ? (
-          <>
-            <ArrowIcon />
-            Đặt hàng
-          </>
-        ) : null}
-        {orderStatus === "loading" ? (
-          <>
-            <Spinner />
-            Đang xử lý
-          </>
-        ) : null}
-        {orderStatus === "success" ? (
-          <>
-            <CheckIcon />
-            Thành công
-          </>
-        ) : null}
+        {orderStatus === "idle" ? <ArrowRight className="h-4 w-4" /> : null}
+        {orderStatus === "loading" ? <Spinner /> : null}
+        {orderStatus === "success" ? <Check className="h-4 w-4" /> : null}
+        {orderStatus === "idle"
+          ? "Đặt hàng"
+          : orderStatus === "loading"
+            ? "Đang xử lý"
+            : "Thành công"}
       </button>
 
-      {orderError ? (
-        <p className="mt-3 text-center font-heading text-[0.72rem] tracking-wide text-red-400">
-          {orderError}
-        </p>
-      ) : null}
-    </div>
+      {orderError ? <p className="mt-3 text-sm text-red-500">{orderError}</p> : null}
+    </aside>
   );
 }
 
 function SuccessScreen({ orderNumber }: { orderNumber: string }) {
   return (
-    <div className="mx-auto max-w-[760px] px-5 py-24 text-center md:px-8">
-      <div className="mx-auto flex h-[72px] w-[72px] items-center justify-center rounded-full border-2 border-green-400/30 bg-green-400/10 text-green-400">
-        <CheckIcon />
+    <div className="mx-auto max-w-[760px] px-4 py-16 text-center sm:px-6 lg:px-8 lg:py-20">
+      <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-store-blue-soft text-store-blue">
+        <Check className="h-8 w-8" />
       </div>
-      <h1
-        className="mt-6 font-display leading-[0.92] tracking-wide"
-        style={{ fontSize: "clamp(2rem,6vw,3rem)" }}
-      >
-        ĐẶT HÀNG <span className="text-gold-500">THÀNH CÔNG</span>
+      <p className="mt-6 font-heading size-kicker font-semibold uppercase tracking-[0.24em] text-store-blue">
+        Đặt hàng thành công
+      </p>
+      <h1 className="mt-3 mx-auto max-w-[14ch] font-heading type-vn-display size-display-md font-semibold uppercase text-[#111111]">
+        Đặt hàng thành công
       </h1>
-      <p className="mx-auto mt-4 max-w-md text-white/60">
-        Đơn hàng của bạn đang được xử lý. Nghe Hustle sẽ liên hệ và giao hàng
-        trong thời gian sớm nhất.
+      <p className="mx-auto mt-4 max-w-[520px] size-copy-md text-store-muted">
+        Đơn hàng đã được ghi nhận. Chúng tôi sẽ sớm xác nhận và cập nhật trạng thái
+        mới nhất tại trang tra cứu đơn hàng.
       </p>
-      <p className="mt-8 font-heading text-[0.72rem] uppercase tracking-[0.18em] text-white/40">
-        Mã đơn hàng
-      </p>
-      <p className="mt-2 font-display text-[1.8rem] tracking-[0.18em] text-gold-500">
-        {orderNumber}
-      </p>
+      <div className="mt-8 rounded-[28px] border border-[var(--border)] bg-white px-6 py-5">
+        <p className="font-heading size-kicker-xs font-semibold uppercase tracking-[0.2em] text-store-muted">
+          Mã đơn hàng
+        </p>
+        <p className="mt-2 font-heading size-price font-semibold uppercase tracking-[0.08em] text-[#111111]">
+          {orderNumber}
+        </p>
+      </div>
       <div className="mt-8 flex flex-wrap justify-center gap-3">
         <Link
           href="/collection"
-          className="bg-gold-500 px-8 py-3.5 font-heading text-[0.84rem] font-bold uppercase tracking-[0.18em] text-brand-black no-underline transition-colors hover:bg-white"
+          className="rounded-full bg-[#111111] px-6 py-3.5 font-heading size-action font-semibold uppercase tracking-[0.18em] text-white no-underline transition-colors hover:bg-store-blue"
         >
           Tiếp tục mua sắm
         </Link>
         <Link
-          href="/"
-          className="border border-white/15 px-8 py-3.5 font-heading text-[0.84rem] font-bold uppercase tracking-[0.18em] text-white/70 no-underline transition-colors hover:border-gold-500/35 hover:text-gold-500"
+          href="/track-order"
+          className="rounded-full border border-[var(--border)] px-6 py-3.5 font-heading size-action font-semibold uppercase tracking-[0.18em] text-[#111111] no-underline transition-colors hover:border-store-blue hover:text-store-blue"
         >
-          Về trang chủ
+          Tra cứu đơn
         </Link>
       </div>
     </div>
@@ -466,25 +443,24 @@ function SuccessScreen({ orderNumber }: { orderNumber: string }) {
 
 function EmptyCheckout() {
   return (
-    <div className="mx-auto max-w-[760px] px-5 py-24 text-center md:px-8">
-      <p className="font-heading text-[0.72rem] font-bold uppercase tracking-[0.18em] text-gold-500">
-        Chưa có sản phẩm
-      </p>
-      <h1
-        className="mt-4 font-display leading-[0.92] tracking-wide"
-        style={{ fontSize: "clamp(2rem,5vw,3.4rem)" }}
-      >
-        Giỏ hàng đang <span className="text-gold-500">trống</span>
-      </h1>
-      <p className="mx-auto mt-4 max-w-md text-white/60">
-        Thêm sản phẩm vào giỏ trước khi chuyển sang bước thanh toán.
-      </p>
-      <Link
-        href="/collection"
-        className="mt-8 inline-flex items-center gap-2.5 bg-gold-500 px-8 py-3.5 font-heading text-[0.84rem] font-bold uppercase tracking-[0.18em] text-brand-black no-underline transition-colors hover:bg-white"
-      >
-        Xem bộ sưu tập
-      </Link>
+    <div className="mx-auto max-w-[760px] px-4 py-16 text-center sm:px-6 lg:px-8 lg:py-20">
+      <div className="rounded-[32px] border border-dashed border-[var(--border)] bg-white px-6 py-16">
+        <p className="font-heading size-kicker font-semibold uppercase tracking-[0.24em] text-store-blue">
+          Giỏ hàng trống
+        </p>
+        <h1 className="mt-3 mx-auto max-w-[14ch] font-heading type-vn-display size-display-sm font-semibold uppercase text-[#111111] sm:size-display-md">
+          Chưa có sản phẩm để thanh toán
+        </h1>
+        <p className="mx-auto mt-4 max-w-[520px] size-copy-md text-store-muted">
+          Thêm vài món vào giỏ trước khi sang bước thanh toán.
+        </p>
+        <Link
+          href="/collection"
+          className="mt-8 inline-flex rounded-full bg-[#111111] px-6 py-3.5 font-heading size-action font-semibold uppercase tracking-[0.18em] text-white no-underline transition-colors hover:bg-store-blue"
+        >
+          Xem bộ sưu tập
+        </Link>
+      </div>
     </div>
   );
 }
@@ -500,24 +476,8 @@ export function CheckoutPage({ vouchers }: { vouchers: Voucher[] }) {
   const [orderStatus, setOrderStatus] = useState<OrderStatus>("idle");
   const [orderNumber, setOrderNumber] = useState("");
   const [orderError, setOrderError] = useState("");
-  const [addressSyncStatus, setAddressSyncStatus] =
-    useState<AddressSyncStatus>("idle");
-  const [addressSyncMessage, setAddressSyncMessage] = useState("");
-  const [lastNormalizedAddress, setLastNormalizedAddress] = useState("");
-  const latestFormRef = useRef(form);
-  const normalizeRequestRef = useRef(0);
-
-  useEffect(() => {
-    latestFormRef.current = form;
-  }, [form]);
 
   const setFieldValue = (key: keyof FormData, value: string) => {
-    const isAddressField =
-      key === "province" ||
-      key === "district" ||
-      key === "ward" ||
-      key === "address";
-
     setForm((current) => ({
       ...current,
       [key]: value,
@@ -525,12 +485,6 @@ export function CheckoutPage({ vouchers }: { vouchers: Voucher[] }) {
       ...(key === "district" ? { ward: "" } : {}),
     }));
     setErrors((current) => ({ ...current, [key]: undefined }));
-
-    if (isAddressField) {
-      setAddressSyncStatus("idle");
-      setAddressSyncMessage("");
-      setLastNormalizedAddress("");
-    }
   };
 
   const setField =
@@ -561,140 +515,6 @@ export function CheckoutPage({ vouchers }: { vouchers: Voucher[] }) {
     return Object.keys(nextErrors).length === 0;
   };
 
-  const syncAddressWithGhtk = async (force = false) => {
-    const snapshot = latestFormRef.current;
-
-    if (!canNormalizeAddress(snapshot)) {
-      return null;
-    }
-
-    const requestId = ++normalizeRequestRef.current;
-    const currentSignature = buildAddressSignature(snapshot);
-
-    if (
-      !force &&
-      isSettledAddressSyncStatus(addressSyncStatus) &&
-      currentSignature === lastNormalizedAddress
-    ) {
-      return snapshot;
-    }
-
-    setAddressSyncStatus("loading");
-    setAddressSyncMessage("Đang đối chiếu địa chỉ với GHTK...");
-
-    try {
-      const response = await fetch("/api/orders/normalize-address", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          customer: {
-            province: snapshot.province,
-            district: snapshot.district,
-            ward: snapshot.ward,
-            address: snapshot.address,
-          },
-          itemCount: items.reduce((sum, item) => sum + item.qty, 0),
-          value: items.reduce((sum, item) => sum + item.price * item.qty, 0),
-        }),
-      });
-
-      const result = (await response.json()) as
-        | ({ error?: string } & Partial<NormalizeAddressResult>)
-        | undefined;
-
-      if (
-        !response.ok ||
-        !result ||
-        typeof result.province !== "string" ||
-        typeof result.district !== "string" ||
-        typeof result.ward !== "string" ||
-        typeof result.address !== "string"
-      ) {
-        setAddressSyncStatus("error");
-        setAddressSyncMessage(
-          result?.error ?? "Không thể chuẩn hóa địa chỉ với GHTK.",
-        );
-        return null;
-      }
-
-      if (
-        requestId !== normalizeRequestRef.current ||
-        buildAddressSignature(latestFormRef.current) !== currentSignature
-      ) {
-        return null;
-      }
-
-      const nextForm: FormData = {
-        ...snapshot,
-        province: result.province,
-        district: result.district,
-        ward: result.ward,
-        address: result.address,
-      };
-
-      setForm(nextForm);
-      setErrors((current) => ({
-        ...current,
-        province: undefined,
-        district: undefined,
-        ward: undefined,
-        address: undefined,
-      }));
-      setAddressSyncStatus(result.deliverable === false ? "warning" : "success");
-      setAddressSyncMessage(
-        result.message ?? "Địa chỉ đã được chuẩn hóa theo GHTK.",
-      );
-      setLastNormalizedAddress(buildAddressSignature(nextForm));
-      setOrderError("");
-
-      return nextForm;
-    } catch {
-      if (requestId !== normalizeRequestRef.current) {
-        return null;
-      }
-
-      setAddressSyncStatus("error");
-      setAddressSyncMessage("Không thể kết nối tới dịch vụ chuẩn hóa địa chỉ.");
-      return null;
-    }
-  };
-
-  const runAutoAddressNormalization = useEffectEvent(() => {
-    void syncAddressWithGhtk(false);
-  });
-
-  const addressReadyForNormalization = canNormalizeAddress(form);
-  const currentAddressSignature = buildAddressSignature(form);
-
-  useEffect(() => {
-    if (!addressReadyForNormalization) {
-      return;
-    }
-
-    if (
-      isSettledAddressSyncStatus(addressSyncStatus) &&
-      currentAddressSignature === lastNormalizedAddress
-    ) {
-      return;
-    }
-
-    const timeoutId = window.setTimeout(() => {
-      runAutoAddressNormalization();
-    }, 900);
-
-    return () => {
-      window.clearTimeout(timeoutId);
-    };
-  }, [
-    addressReadyForNormalization,
-    currentAddressSignature,
-    items,
-    addressSyncStatus,
-    lastNormalizedAddress,
-  ]);
-
   const placeOrder = async () => {
     if (!items.length || !validate() || orderStatus !== "idle") {
       return;
@@ -704,19 +524,13 @@ export function CheckoutPage({ vouchers }: { vouchers: Voucher[] }) {
     setOrderError("");
 
     try {
-      const normalizedForm = await syncAddressWithGhtk(true);
-      if (!normalizedForm) {
-        setOrderStatus("idle");
-        return;
-      }
-
       const response = await fetch("/api/orders", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          customer: normalizedForm,
+          customer: form,
           items,
           paymentMethod: payMethod,
           voucherCode: voucherCode || null,
@@ -745,7 +559,7 @@ export function CheckoutPage({ vouchers }: { vouchers: Voucher[] }) {
 
   if (orderStatus === "success") {
     return (
-      <div className="min-h-screen bg-brand-black font-body text-white">
+      <div className="min-h-screen bg-[var(--background)]">
         <CheckoutNav />
         <SuccessScreen orderNumber={orderNumber} />
       </div>
@@ -753,21 +567,32 @@ export function CheckoutPage({ vouchers }: { vouchers: Voucher[] }) {
   }
 
   return (
-    <div className="min-h-screen bg-brand-black font-body text-white">
+    <div className="min-h-screen bg-[var(--background)]">
       <CheckoutNav />
 
       {items.length === 0 ? (
         <EmptyCheckout />
       ) : (
-        <div className="mx-auto max-w-[1120px] px-5 py-8 md:px-8">
-          <div className="grid gap-8 lg:grid-cols-[minmax(0,1.15fr)_380px]">
-            <div className="space-y-6">
-              <section className="border border-white/[0.08] bg-brand-gray-dark p-5">
-                <p className="font-heading text-[0.72rem] font-bold uppercase tracking-[0.2em] text-gold-500">
-                  Thông tin khách hàng
-                </p>
+        <div className="mx-auto max-w-[1240px] px-4 py-8 sm:px-6 lg:px-8">
+          <div className="mb-6 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-store-muted">
+            <span className="inline-flex items-center gap-2">
+              <ShieldCheck className="h-4 w-4 text-store-blue" />
+              Đặt hàng an toàn
+            </span>
+            <span className="inline-flex items-center gap-2">
+              <Sparkles className="h-4 w-4 text-store-blue" />
+              Form rõ ràng, điền nhanh
+            </span>
+            <span className="inline-flex items-center gap-2">
+              <WalletCards className="h-4 w-4 text-store-blue" />
+              COD & chuyển khoản QR
+            </span>
+          </div>
 
-                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_390px]">
+            <div className="space-y-6">
+              <SectionCard eyebrow="Khách hàng" title="Thông tin khách hàng">
+                <div className="grid gap-4 sm:grid-cols-2">
                   <FormInput
                     label="Họ và tên *"
                     placeholder="Nguyễn Văn A"
@@ -785,56 +610,36 @@ export function CheckoutPage({ vouchers }: { vouchers: Voucher[] }) {
                     error={errors.phone}
                   />
                 </div>
-
                 <FormInput
                   label="Email"
                   type="email"
                   placeholder="email@example.com"
                   value={form.email}
                   onChange={setField("email")}
-                  className="mt-3"
+                  className="mt-4"
                 />
-              </section>
+              </SectionCard>
 
-              <section className="border border-white/[0.08] bg-brand-gray-dark p-5">
-                <p className="font-heading text-[0.72rem] font-bold uppercase tracking-[0.2em] text-gold-500">
-                  Địa chỉ giao hàng
-                </p>
+              <SectionCard eyebrow="Giao hàng" title="Địa chỉ giao hàng">
+                <CheckoutAddressSection
+                  value={{
+                    province: form.province,
+                    district: form.district,
+                    ward: form.ward,
+                    address: form.address,
+                    note: form.note,
+                  }}
+                  errors={{
+                    province: errors.province,
+                    address: errors.address,
+                  }}
+                  onFieldChange={(field, value) => setFieldValue(field, value)}
+                />
+              </SectionCard>
 
-                <div className="mt-4">
-                  <CheckoutAddressSection
-                    value={{
-                      province: form.province,
-                      district: form.district,
-                      ward: form.ward,
-                      address: form.address,
-                      note: form.note,
-                    }}
-                    errors={{
-                      province: errors.province,
-                      address: errors.address,
-                    }}
-                    addressSyncStatus={addressSyncStatus}
-                    addressSyncMessage={addressSyncMessage}
-                    onFieldChange={(field, value) => setFieldValue(field, value)}
-                    onRetryNormalize={() => {
-                      void syncAddressWithGhtk(true);
-                    }}
-                  />
-                </div>
-              </section>
-
-              <section className="border border-white/[0.08] bg-brand-gray-dark p-5">
-                <p className="font-heading text-[0.72rem] font-bold uppercase tracking-[0.2em] text-gold-500">
-                  Thanh toán
-                </p>
-                <div className="mt-4">
-                  <PaymentSelector
-                    selected={payMethod}
-                    onChange={setPayMethod}
-                  />
-                </div>
-              </section>
+              <SectionCard eyebrow="Thanh toán" title="Phương thức thanh toán">
+                <PaymentSelector selected={payMethod} onChange={setPayMethod} />
+              </SectionCard>
             </div>
 
             <OrderSummary

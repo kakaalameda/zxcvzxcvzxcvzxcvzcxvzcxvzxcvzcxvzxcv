@@ -1,283 +1,394 @@
 "use client";
 
+import { useMemo, useState } from "react";
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
-import { useCart } from "@/components/cart-context";
+import { ArrowRight, Flag, Package, RefreshCw, Truck } from "lucide-react";
 import { ProductMedia } from "@/components/product-media";
-import {
-  BRAND_PERKS,
-  BRAND_STATS,
-  MARQUEE_ITEMS,
-  buildCartItem,
-  formatCompactPrice,
-  getDefaultColor,
-  getDefaultSize,
-  type Product,
-} from "@/lib/store";
+import { BRAND_PERKS, formatVnd, type Product } from "@/lib/store";
 
-function ArrowRight({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className={className ?? "w-5 h-5"}>
-      <path d="M5 12h14M12 5l7 7-7 7" />
-    </svg>
-  );
+const PERK_ICONS = [Truck, RefreshCw, Package, Flag];
+
+function extractFirstNumber(value: string | undefined, fallback: string) {
+  const match = value?.match(/\d+/);
+  return match?.[0] ?? fallback;
 }
 
-function PlusIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} className="w-4 h-4">
-      <line x1="12" y1="5" x2="12" y2="19" />
-      <line x1="5" y1="12" x2="19" y2="12" />
-    </svg>
-  );
+function getSpecValue(product: Product, labels: string[], fallback: string) {
+  return product.specs.find((spec) => labels.includes(spec.label))?.value ?? fallback;
 }
 
-function CheckIcon() {
+function HeroSection({ heroProduct }: { heroProduct: Product }) {
+  const [selectedColorIndex, setSelectedColorIndex] = useState(0);
+  const [activeImageIndex, setActiveImageIndex] = useState(0);
+  const selectedColor = heroProduct.colors[selectedColorIndex] ?? heroProduct.colors[0];
+  const weightSpec = getSpecValue(heroProduct, ["Định lượng"], "");
+  const eyebrow = weightSpec ? `Sản phẩm nổi bật — ${weightSpec}` : "Sản phẩm nổi bật";
+  const description = heroProduct.description.trim();
+  const specPills = heroProduct.specs.slice(0, 4);
+
+  const galleryImages = useMemo(() => {
+    if (!selectedColor.id) {
+      return heroProduct.images;
+    }
+
+    const matches = heroProduct.images.filter(
+      (image) => image.colorId == null || image.colorId === selectedColor.id,
+    );
+
+    return matches.length ? matches : heroProduct.images;
+  }, [heroProduct.images, selectedColor.id]);
+
+  const activeImage = galleryImages[activeImageIndex] ?? galleryImages[0];
+
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} className="w-4 h-4">
-      <polyline points="20 6 9 17 4 12" />
-    </svg>
-  );
-}
+    <section className="border-b border-[var(--border)] bg-white">
+      <div className="mx-auto grid max-w-[1280px] gap-10 px-4 pb-0 pt-10 sm:px-6 lg:grid-cols-[minmax(0,0.9fr)_500px] lg:px-8 lg:pt-16">
+        <div className="pb-10 lg:pb-14">
+          <p className="size-kicker-xs uppercase tracking-[0.24em] text-store-blue">
+            {eyebrow}
+          </p>
 
-function Hero() {
-  return (
-    <section className="relative min-h-screen flex items-center justify-start overflow-hidden px-5 md:px-8">
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_60%_80%_at_70%_50%,rgba(245,168,0,0.08)_0%,transparent_60%)] bg-gradient-to-br from-brand-black via-[#0a0a0a] to-[#1a1100]" />
-      <div
-        className="absolute inset-0 opacity-[0.04]"
-        style={{
-          backgroundImage:
-            "linear-gradient(white 1px,transparent 1px),linear-gradient(90deg,white 1px,transparent 1px)",
-          backgroundSize: "60px 60px",
-        }}
-      />
-      <div className="absolute top-0 left-1/2 w-px h-full bg-gradient-to-b from-transparent via-gold-500/30 to-transparent" />
+          <h1 className="mt-6 max-w-[9ch] font-editorial text-[clamp(3.1rem,5.8vw,5.15rem)] leading-[0.93] tracking-[-0.05em] text-[#171513]">
+            <span>{heroProduct.name}</span>
+            <span className="mt-2 block italic text-[#7b746c]">{heroProduct.subtitle}</span>
+          </h1>
 
-      <div className="relative z-10 max-w-2xl">
-        <div className="flex items-center gap-3 mb-5">
-          <div className="w-10 h-0.5 bg-gold-500" />
-          <span className="font-heading text-xs tracking-[0.25em] uppercase text-gold-500 font-bold">
-            SS 2026 Collection
-          </span>
-        </div>
+          <p className="mt-6 max-w-[500px] size-copy-md whitespace-pre-line text-store-muted">
+            {description}
+          </p>
 
-        <h1 className="font-display leading-[0.9] tracking-wide mb-6" style={{ fontSize: "clamp(4rem,12vw,9rem)" }}>
-          <span className="block text-gold-500">HUSTLE</span>
-          <span className="block text-white">NEVER</span>
-          <span className="block text-transparent" style={{ WebkitTextStroke: "2px rgba(255,255,255,0.3)" }}>
-            STOPS
-          </span>
-        </h1>
+          <div className="mt-8 flex flex-wrap gap-2">
+            {specPills.map((spec) => (
+              <span
+                key={`${spec.label}-${spec.value}`}
+                className="rounded-full border border-[var(--border)] bg-white px-3.5 py-2 text-[0.73rem] tracking-[0.02em] text-[#3b3732]"
+              >
+                <strong className="font-semibold text-[#171513]">{spec.label}</strong>
+                {` — ${spec.value}`}
+              </span>
+            ))}
+          </div>
 
-        <p
-          className="text-white/70 leading-relaxed max-w-md mb-10 font-light tracking-wide"
-          style={{ fontSize: "clamp(0.9rem,2vw,1rem)" }}
-        >
-          Streetwear sinh ra từ đường phố Việt Nam. Mỗi thiết kế là một câu chuyện về tham vọng,
-          bản sắc và nhịp làm việc không dừng lại.
-        </p>
-
-        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
-          <Link
-            href="#arrivals"
-            className="group relative inline-flex items-center gap-2.5 bg-gold-500 text-brand-black font-heading text-base font-bold tracking-widest uppercase px-10 py-4 overflow-hidden border-2 border-gold-500 no-underline transition-all duration-300"
-          >
-            <span className="absolute inset-0 bg-white scale-x-0 origin-right group-hover:scale-x-100 group-hover:origin-left transition-transform duration-300" />
-            <span className="relative z-10">Mua Ngay</span>
-            <ArrowRight className="relative z-10 w-4.5 h-4.5 transition-transform duration-200 group-hover:translate-x-1" />
-          </Link>
-          <Link
-            href="/lookbook"
-            className="inline-flex items-center gap-2 border border-white/30 text-white font-heading text-sm font-semibold tracking-widest uppercase px-7 py-4 hover:border-gold-500 hover:text-gold-500 transition-all duration-200 no-underline"
-          >
-            Xem Lookbook
-          </Link>
-        </div>
-
-        <div className="flex gap-8 md:gap-10 mt-12 pt-8 border-t border-white/[0.08]">
-          {BRAND_STATS.map((stat) => (
-            <div key={stat.label}>
-              <p className="font-display text-3xl text-gold-500 leading-none">{stat.num}</p>
-              <p className="font-heading text-xs tracking-widest uppercase text-white/60 mt-1">{stat.label}</p>
+          <div className="hidden">
+            <div className="flex items-center gap-3 text-[0.72rem] uppercase tracking-[0.14em] text-[#3b3732]">
+              <span>Màu sắc</span>
+              <span className="normal-case tracking-normal text-[#5f5850]">— {selectedColor.name}</span>
             </div>
-          ))}
-        </div>
-      </div>
 
-      <div className="hidden lg:flex absolute right-[5%] top-1/2 -translate-y-1/2 w-28 h-28 rounded-full bg-gold-500 flex-col items-center justify-center text-brand-black text-center font-display leading-tight animate-spin-slow">
-        <span className="text-3xl leading-none">NEW</span>
-        <span className="text-sm tracking-widest">DROP</span>
+            <div className="mt-4 flex flex-wrap gap-3">
+              {heroProduct.colors.map((color, index) => (
+                <button
+                  key={color.name}
+                  type="button"
+                  title={color.name}
+                  onClick={() => {
+                    setSelectedColorIndex(index);
+                    setActiveImageIndex(0);
+                  }}
+                  className={[
+                    "h-9 w-9 rounded-full border-2 transition duration-150",
+                    index === selectedColorIndex
+                      ? "scale-[1.08] border-store-blue shadow-[0_0_0_2px_white,0_0_0_4px_#2447f9]"
+                      : "border-black/10 hover:scale-[1.08] hover:border-black/30",
+                  ].join(" ")}
+                  style={{ backgroundColor: color.hex }}
+                />
+              ))}
+            </div>
+          </div>
+
+          <div className="hidden">
+            <Link
+              href={`/product/${heroProduct.id}`}
+              className="inline-flex min-w-[220px] items-center justify-center rounded-full bg-[#111111] px-6 py-3.5 font-heading size-action font-semibold uppercase tracking-[0.18em] text-white no-underline shadow-[0_14px_30px_rgba(17,17,17,0.12)] transition-colors hover:bg-store-blue"
+            >
+              Mua ngay — {formatVnd(heroProduct.price)}
+            </Link>
+            <Link
+              href={`/product/${heroProduct.id}`}
+              className="inline-flex min-w-[140px] items-center justify-center rounded-full border border-[var(--border)] bg-white px-6 py-3.5 font-heading size-action font-semibold uppercase tracking-[0.18em] text-[#111111] no-underline transition-colors hover:border-store-blue hover:text-store-blue"
+            >
+              Chọn size
+            </Link>
+          </div>
+        </div>
+
+        <div className="flex flex-col items-center lg:pt-2">
+          <div className="w-full max-w-[500px] rounded-[40px] bg-[#eff2f8] p-5 sm:p-6">
+            <div className="overflow-hidden rounded-[28px] bg-white">
+              <div className="aspect-[4/4.55]">
+                <ProductMedia
+                  image={activeImage}
+                  bgClass={activeImage.bgClass}
+                  className="flex h-full w-full items-center justify-center"
+                  imageClassName="h-full w-full object-cover"
+                  svgClassName="h-[220px] w-[220px] opacity-20"
+                  stroke="rgba(0,0,0,0.08)"
+                />
+              </div>
+            </div>
+
+            {galleryImages.length > 1 ? (
+              <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
+                {galleryImages.map((image, index) => (
+                  <button
+                    key={`${image.id}-${index}`}
+                    type="button"
+                    onClick={() => setActiveImageIndex(index)}
+                    className={[
+                      "shrink-0 overflow-hidden rounded-[16px] border bg-white shadow-sm transition-all",
+                      index === activeImageIndex
+                        ? "border-store-blue shadow-[0_10px_30px_rgba(36,71,249,0.16)]"
+                        : "border-[var(--border)] hover:border-store-blue",
+                    ].join(" ")}
+                    aria-label={`Xem ảnh ${index + 1} của ${heroProduct.name}`}
+                  >
+                    <div className="h-[68px] w-[68px]">
+                      <ProductMedia
+                        image={image}
+                        bgClass={image.bgClass}
+                        className="h-full w-full"
+                        imageClassName="h-full w-full object-cover"
+                        svgClassName="h-9 w-9 opacity-15"
+                        stroke="rgba(0,0,0,0.08)"
+                      />
+                    </div>
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </div>
+
+          <div className="mt-4 inline-flex rounded-full bg-white px-4 py-2 font-heading size-action font-semibold text-[#111111] shadow-sm">
+            {formatVnd(heroProduct.price)}
+          </div>
+
+          <div className="mt-4 w-full max-w-[500px] border-t border-[var(--border)] pb-10 pt-4 text-sm text-[#5d5650] lg:pb-12">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p className="font-heading size-label font-semibold uppercase tracking-[0.16em] text-[#111111]">
+                  {heroProduct.name}
+                </p>
+                <p className="mt-1 leading-6">{heroProduct.subtitle}</p>
+              </div>
+              <Link
+                href={`/product/${heroProduct.id}`}
+                className="inline-flex min-w-[170px] items-center justify-center gap-2 rounded-full bg-[#111111] px-6 py-3.5 font-heading size-action font-semibold uppercase tracking-[0.18em] text-white no-underline shadow-[0_14px_30px_rgba(17,17,17,0.12)] transition-colors hover:bg-store-blue"
+              >
+                Xem chi tiết
+                <ArrowRight className="h-3.5 w-3.5" />
+              </Link>
+            </div>
+
+            <div className="mt-6">
+              <div className="flex items-center gap-3 text-[0.72rem] uppercase tracking-[0.14em] text-[#3b3732]">
+                <span>Màu sắc</span>
+                <span className="normal-case tracking-normal text-[#5f5850]">— {selectedColor.name}</span>
+              </div>
+
+              <div className="mt-4 flex flex-wrap gap-3">
+                {heroProduct.colors.map((color, index) => (
+                  <button
+                    key={color.name}
+                    type="button"
+                    title={color.name}
+                    aria-pressed={index === selectedColorIndex}
+                    onClick={() => {
+                      setSelectedColorIndex(index);
+                      setActiveImageIndex(0);
+                    }}
+                    className={[
+                      "h-9 w-9 rounded-full border-2 transition duration-150",
+                      index === selectedColorIndex
+                        ? "scale-[1.08] border-store-blue shadow-[0_0_0_2px_white,0_0_0_4px_#2447f9]"
+                        : "border-black/10 hover:scale-[1.08] hover:border-black/30",
+                    ].join(" ")}
+                    style={{ backgroundColor: color.hex }}
+                  />
+                ))}
+              </div>
+            </div>
+
+            <div className="mt-6 flex flex-wrap items-center gap-3">
+              <Link
+                href={`/product/${heroProduct.id}`}
+                className="inline-flex min-w-[220px] items-center justify-center rounded-full bg-[#111111] px-6 py-3.5 font-heading size-action font-semibold uppercase tracking-[0.18em] text-white no-underline shadow-[0_14px_30px_rgba(17,17,17,0.12)] transition-colors hover:bg-store-blue"
+              >
+                Mua ngay — {formatVnd(heroProduct.price)}
+              </Link>
+              <Link
+                href={`/product/${heroProduct.id}`}
+                className="inline-flex min-w-[140px] items-center justify-center rounded-full border border-[var(--border)] bg-white px-6 py-3.5 font-heading size-action font-semibold uppercase tracking-[0.18em] text-[#111111] no-underline transition-colors hover:border-store-blue hover:text-store-blue"
+              >
+                Chọn size
+              </Link>
+            </div>
+          </div>
+
+          <div className="hidden">
+            <div>
+              <p className="font-heading size-label font-semibold uppercase tracking-[0.16em] text-[#111111]">
+                {heroProduct.name}
+              </p>
+              <p className="mt-1 leading-6">{heroProduct.subtitle}</p>
+            </div>
+            <Link
+              href={`/product/${heroProduct.id}`}
+              className="inline-flex items-center gap-2 whitespace-nowrap text-[0.73rem] font-semibold uppercase tracking-[0.16em] text-[#171513] no-underline transition-colors hover:text-store-blue"
+            >
+              Xem chi tiết
+              <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
+          </div>
+        </div>
       </div>
     </section>
   );
 }
 
-function MarqueeBanner() {
+function Ticker({ heroProduct }: { heroProduct: Product }) {
+  const weightSpec =
+    heroProduct.specs.find((spec) => spec.label === "Định lượng")?.value ?? "240 GSM";
+  const tickerItems = [
+    weightSpec,
+    "New Drop 2026",
+    "Made in Vietnam",
+    `${heroProduct.colors.length} màu dễ phối`,
+    "Free Ship từ 500K",
+    "Đổi trả 30 ngày",
+  ];
+
   return (
-    <div className="bg-gold-500 py-2.5 overflow-hidden">
+    <section className="overflow-hidden bg-[#111111] py-2.5">
       <div className="flex animate-marquee whitespace-nowrap">
-        {MARQUEE_ITEMS.map((item, index) => (
-          <span key={`${item}-${index}`} className="font-display text-base tracking-widest text-brand-black px-8">
-            {item}
-            {index < MARQUEE_ITEMS.length - 1 ? <span className="text-black/30 px-2">✦</span> : null}
+        {[...tickerItems, ...tickerItems].map((item, index) => (
+          <span key={`${item}-${index}`} className="inline-flex items-center px-5">
+            <span className="font-heading text-[0.7rem] uppercase tracking-[0.18em] text-white">
+              {item}
+            </span>
+            <span className="ml-5 text-[0.75rem] text-[#b75443]">—</span>
           </span>
         ))}
       </div>
-    </div>
+    </section>
   );
 }
 
-function ProductCard({ product }: { product: Product }) {
-  const { addItem } = useCart();
-  const [added, setAdded] = useState(false);
-  const defaultSize = getDefaultSize(product);
-  const timeoutRef = useRef<number | null>(null);
+function DetailStrip({ heroProduct }: { heroProduct: Product }) {
+  const materialSpec =
+    heroProduct.specs.find((spec) => spec.label === "Chất liệu")?.value ?? "100% Cotton";
+  const weightSpec =
+    heroProduct.specs.find((spec) => spec.label === "Định lượng")?.value ?? "240 GSM";
+  const weightNumber = extractFirstNumber(weightSpec, "240");
+  const materialNumber = extractFirstNumber(materialSpec, "100");
 
-  useEffect(() => {
-    // Cleanup timeout khi component unmount để tránh setState trên component đã huỷ
-    return () => {
-      if (timeoutRef.current !== null) {
-        window.clearTimeout(timeoutRef.current);
-      }
-    };
-  }, []);
-
-  const handleAdd = (event: React.MouseEvent) => {
-    event.preventDefault();
-    event.stopPropagation();
-
-    if (!defaultSize) {
-      return;
-    }
-
-    addItem(buildCartItem(product, getDefaultColor(product), defaultSize));
-    setAdded(true);
-
-    if (timeoutRef.current !== null) {
-      window.clearTimeout(timeoutRef.current);
-    }
-    timeoutRef.current = window.setTimeout(() => {
-      setAdded(false);
-      timeoutRef.current = null;
-    }, 1500);
-  };
-
-  const tagStyles: Record<NonNullable<Product["tagVariant"]>, string> = {
-    gold: "bg-gold-500 text-brand-black",
-    white: "bg-white text-brand-black",
-    red: "bg-red-600 text-white",
-    outline: "border border-white/50 text-white",
-  };
+  const detailItems = [
+    {
+      number: weightNumber,
+      title: "Gram per square meter",
+      text: `${weightSpec} — đủ chắc để lên phom gọn, đủ thoáng để mặc liên tục trong nhịp sống hằng ngày.`,
+    },
+    {
+      number: String(heroProduct.colors.length),
+      title: "Màu sắc dễ phối",
+      text: `Bảng màu gọn với ${heroProduct.colors.length} lựa chọn nền tảng, ưu tiên những tông dễ mặc lại lâu dài.`,
+    },
+    {
+      number: materialNumber,
+      title: "% chất liệu nền",
+      text: `${materialSpec}. ${heroProduct.features[0] ?? "Hoàn thiện đáng tin để mặc được lâu hơn."}`,
+    },
+  ];
 
   return (
-    <div className="group relative overflow-hidden bg-brand-gray-mid aspect-[3/4]">
-      <Link href={`/product/${product.id}`} aria-label={`Xem ${product.name}`} className="absolute inset-0 z-10" />
-
-      <ProductMedia
-        image={product.images[0]}
-        bgClass={product.colors[0].bgClass}
-        className="h-full w-full flex items-center justify-center transition-transform duration-700 group-hover:scale-105"
-        imageClassName="h-full w-full object-cover"
-        svgClassName="h-20 w-20 opacity-10"
-        stroke="white"
-      />
-      <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent" />
-      {product.tag && product.tagVariant ? (
-        <div className={`absolute top-4 left-4 font-heading text-[0.65rem] font-bold tracking-widest uppercase px-2.5 py-0.5 z-20 ${tagStyles[product.tagVariant]}`}>
-          {product.tag}
-        </div>
-      ) : null}
-
-      <div className="absolute bottom-0 left-0 right-0 p-5 transition-transform duration-400 group-hover:-translate-y-2 z-20">
-        <p className="font-heading text-lg font-bold tracking-wide uppercase mb-0.5">{product.name}</p>
-        <p className="text-white/60 text-xs font-body mb-3">{product.subtitle}</p>
-        <div className="flex items-center justify-between">
-          <span className="font-display text-2xl text-gold-500">{formatCompactPrice(product.price)}</span>
-          <button
-            onClick={handleAdd}
-            aria-label={`Thêm ${product.name} vào giỏ`}
+    <section className="bg-[#ebe7e0] px-4 py-12 sm:px-6 lg:px-8 lg:py-16">
+      <div className="mx-auto grid max-w-[980px] gap-8 lg:grid-cols-3 lg:gap-0">
+        {detailItems.map((item, index) => (
+          <div
+            key={item.title}
             className={[
-              "w-9 h-9 flex items-center justify-center border-none cursor-pointer transition-all duration-300 z-20 relative",
-              "scale-0 group-hover:scale-100",
-              added ? "bg-white text-brand-black" : "bg-gold-500 text-brand-black",
+              "lg:px-10",
+              index !== detailItems.length - 1 ? "lg:border-r lg:border-black/10" : "",
+              index === 0 ? "lg:pl-0" : "",
             ].join(" ")}
           >
-            {added ? <CheckIcon /> : <PlusIcon />}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function NewArrivals({ featuredProducts }: { featuredProducts: Product[] }) {
-  return (
-    <section id="arrivals" className="px-5 md:px-8 py-24 bg-brand-black">
-      <div className="flex flex-col sm:flex-row sm:items-end justify-between mb-12 gap-4">
-        <div>
-          <p className="font-heading text-xs tracking-[0.25em] uppercase text-gold-500 font-bold mb-1.5">Mới nhất</p>
-          <h2 className="font-display leading-[0.95] tracking-wide" style={{ fontSize: "clamp(2.5rem,6vw,4rem)" }}>
-            NEW ARRIVALS
-          </h2>
-        </div>
-        <Link
-          href="/collection"
-          className="font-heading text-xs tracking-widest uppercase text-white/60 hover:text-gold-500 border-b border-white/30 hover:border-gold-500 pb-0.5 transition-all duration-200 no-underline font-semibold whitespace-nowrap self-start sm:self-auto"
-        >
-          Xem tất cả →
-        </Link>
-      </div>
-
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-px">
-        {featuredProducts.map((product) => (
-          <ProductCard key={product.id} product={product} />
+            <p className="font-editorial text-[3rem] italic leading-none tracking-[-0.04em] text-black/15">
+              {item.number}
+            </p>
+            <h2 className="mt-3 text-[0.98rem] font-semibold text-[#171513]">{item.title}</h2>
+            <p className="mt-2 max-w-[28ch] text-sm leading-7 text-[#5a544e]">{item.text}</p>
+          </div>
         ))}
       </div>
     </section>
   );
 }
 
-function FeatureBanner() {
+function FeaturedGallery({ products }: { products: Product[] }) {
+  const gridColumnsClass =
+    products.length >= 4 ? "xl:grid-cols-4" : products.length === 3 ? "xl:grid-cols-3" : "xl:grid-cols-2";
+
   return (
-    <section className="relative px-5 md:px-8 py-24 bg-brand-gray-dark overflow-hidden">
-      <div
-        className="absolute inset-0 flex items-center justify-center font-display text-gold-500/[0.04] select-none pointer-events-none"
-        style={{ fontSize: "clamp(6rem,20vw,14rem)", letterSpacing: "0.05em" }}
-        aria-hidden
-      >
-        HUSTLE
-      </div>
+    <section className="bg-white px-4 py-14 sm:px-6 lg:px-8 lg:py-20">
+      <div className="mx-auto max-w-[1240px]">
+        <div className="flex items-end justify-between gap-4 border-b border-[#ece6de] pb-4">
+          <div>
+            <p className="text-[0.72rem] uppercase tracking-[0.2em] text-[#8b847b]">
+              Sản phẩm nổi bật
+            </p>
+            <h2 className="mt-2 font-editorial text-[clamp(2rem,3vw,2.35rem)] leading-none tracking-[-0.03em] text-[#171513]">
+              Mặc đẹp, chọn nhanh.
+            </h2>
+          </div>
+          <Link
+            href="/collection"
+            className="hidden border-b border-[#bdb5ab] pb-1 text-[0.76rem] font-semibold uppercase tracking-[0.14em] text-[#3b3732] no-underline transition-colors hover:border-[#171513] sm:inline-flex"
+          >
+            Xem tất cả
+          </Link>
+        </div>
 
-      <div className="relative z-10 max-w-3xl mx-auto text-center">
-        <p className="font-heading text-xs tracking-[0.25em] uppercase text-gold-500 font-bold mb-3">
-          Triết lý thương hiệu
-        </p>
-        <h2 className="font-display leading-[0.95] mb-6" style={{ fontSize: "clamp(2.5rem,7vw,5rem)" }}>
-          BORN FROM THE <span className="text-gold-500">STREETS</span>
-        </h2>
-        <p className="text-white/60 leading-relaxed max-w-lg mx-auto mb-10 font-light">
-          Nghe Hustle không chỉ là thời trang. Đây là lời tuyên ngôn về nhịp sống đô thị, về việc
-          làm thật, mặc thật và xây bản sắc bằng sản phẩm đủ tốt để mặc lại mỗi ngày.
-        </p>
-        <Link
-          href="/about"
-          className="group relative inline-flex items-center gap-2.5 bg-gold-500 text-brand-black font-heading text-base font-bold tracking-widest uppercase px-10 py-4 overflow-hidden border-2 border-gold-500 no-underline transition-all duration-300"
-        >
-          <span className="absolute inset-0 bg-white scale-x-0 origin-right group-hover:scale-x-100 group-hover:origin-left transition-transform duration-300" />
-          <span className="relative z-10">Tìm hiểu thêm</span>
-          <ArrowRight className="relative z-10 w-4.5 h-4.5 transition-transform duration-200 group-hover:translate-x-1" />
-        </Link>
+        <div className={`mt-6 grid gap-px bg-[#ece6de] sm:grid-cols-2 ${gridColumnsClass}`}>
+          {products.map((product) => (
+            <Link
+              key={product.id}
+              href={`/product/${product.id}`}
+              className="group bg-white no-underline transition-colors hover:bg-[#faf7f2]"
+            >
+              <div className="relative aspect-[3/4] overflow-hidden bg-[#f5f1eb]">
+                <ProductMedia
+                  image={product.images[0]}
+                  bgClass="from-[#f5f1eb] to-[#f0ebe3]"
+                  className="flex h-full w-full items-center justify-center p-6 transition-transform duration-500 group-hover:scale-[1.02]"
+                  imageClassName="h-full w-full object-contain"
+                  svgClassName="h-28 w-28 opacity-15"
+                  stroke="rgba(0,0,0,0.08)"
+                />
 
-        <div className="flex flex-wrap justify-center gap-10 mt-16 pt-10 border-t border-white/[0.08]">
-          {BRAND_PERKS.map((perk) => (
-            <div key={perk.title} className="text-center max-w-[140px]">
-              <div className="w-11 h-11 mx-auto mb-3 text-gold-500 border border-gold-500/30 flex items-center justify-center font-display text-lg">
-                NH
+                {product.tag ? (
+                  <span
+                    className={[
+                      "absolute left-3 top-3 px-2 py-1 text-[0.58rem] font-semibold uppercase tracking-[0.14em]",
+                      product.tagVariant === "red"
+                        ? "bg-[#b93c2a] text-white"
+                        : "bg-[#111111] text-white",
+                    ].join(" ")}
+                  >
+                    {product.tag}
+                  </span>
+                ) : null}
               </div>
-              <p className="font-heading font-bold text-xs tracking-widest uppercase mb-1">{perk.title}</p>
-              <p className="text-white/60 text-xs">{perk.text}</p>
-            </div>
+
+              <div className="px-4 pb-5 pt-4">
+                <h3 className="text-[0.92rem] font-semibold leading-6 text-[#171513]">
+                  {product.name}
+                </h3>
+                <p className="mt-1 text-sm leading-6 text-[#6b645d]">{product.subtitle}</p>
+                <p className="mt-3 text-[0.92rem] font-semibold text-[#171513]">
+                  {formatVnd(product.price)}
+                </p>
+              </div>
+            </Link>
           ))}
         </div>
       </div>
@@ -285,13 +396,50 @@ function FeatureBanner() {
   );
 }
 
-export function HomePage({ featuredProducts }: { featuredProducts: Product[] }) {
+function ServiceStrip() {
   return (
-    <div className="bg-brand-black text-white font-body overflow-x-hidden">
-      <Hero />
-      <MarqueeBanner />
-      <NewArrivals featuredProducts={featuredProducts} />
-      <FeatureBanner />
+    <section className="border-y border-[#ece6de] bg-white">
+      <div className="mx-auto grid max-w-[1240px] sm:grid-cols-2 lg:grid-cols-4">
+        {BRAND_PERKS.map((perk, index) => {
+          const Icon = PERK_ICONS[index];
+          return (
+            <div
+              key={perk.title}
+              className="border-b border-[#ece6de] px-6 py-8 last:border-b-0 lg:border-b-0 lg:border-r lg:last:border-r-0"
+            >
+              <Icon className="h-4 w-4 text-[#171513]" />
+              <h3 className="mt-4 text-[0.92rem] font-semibold text-[#171513]">{perk.title}</h3>
+              <p className="mt-1 text-sm leading-6 text-[#6b645d]">{perk.text}</p>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+export function HomePage({
+  featuredProducts,
+  products,
+}: {
+  featuredProducts: Product[];
+  products: Product[];
+}) {
+  const catalog = Array.from(new Map([...featuredProducts, ...products].map((product) => [product.id, product])).values());
+  const heroProduct = featuredProducts[0] ?? catalog[0] ?? null;
+  const galleryProducts = catalog.slice(0, 4);
+
+  if (!heroProduct) {
+    return null;
+  }
+
+  return (
+    <div className="overflow-x-hidden bg-white text-[#111111]">
+      <HeroSection heroProduct={heroProduct} />
+      <Ticker heroProduct={heroProduct} />
+      <DetailStrip heroProduct={heroProduct} />
+      <FeaturedGallery products={galleryProducts} />
+      <ServiceStrip />
     </div>
   );
 }

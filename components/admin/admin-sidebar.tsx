@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Package, Settings2, ShoppingCart, TicketPercent } from "lucide-react";
+import { BookImage, Package, Settings2, ShoppingCart, TicketPercent } from "lucide-react";
 import { AdminLogoutButton } from "@/components/admin/admin-logout-button";
 import { cn } from "@/lib/utils";
 
@@ -21,6 +21,11 @@ const NAV_ITEMS = [
     href: "/admin/vouchers",
     label: "Vouchers",
     icon: TicketPercent,
+  },
+  {
+    href: "/admin/lookbook",
+    label: "Lookbook",
+    icon: BookImage,
   },
   {
     href: "/admin/cauhinhapi",

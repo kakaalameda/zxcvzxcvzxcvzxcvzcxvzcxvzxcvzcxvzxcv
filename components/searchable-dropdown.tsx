@@ -1,5 +1,6 @@
 "use client";
 
+import { ChevronDown } from "lucide-react";
 import { useEffect, useEffectEvent, useId, useRef, useState } from "react";
 
 export interface SearchableDropdownOption {
@@ -31,7 +32,7 @@ export function SearchableDropdown({
   disabled = false,
   error,
   helperText,
-  emptyText = "Khong co ket qua phu hop.",
+  emptyText = "Không có kết quả phù hợp.",
   className,
 }: SearchableDropdownProps) {
   const listboxId = useId();
@@ -88,7 +89,7 @@ export function SearchableDropdown({
 
   return (
     <div ref={containerRef} className={className}>
-      <label className="block font-heading text-[0.72rem] tracking-[0.18em] uppercase text-white/40 font-bold mb-1.5">
+      <label className="mb-1.5 block font-heading size-kicker-xs font-semibold uppercase tracking-[0.18em] text-store-muted">
         {label}
       </label>
       <div className="relative">
@@ -103,31 +104,30 @@ export function SearchableDropdown({
             setIsOpen(true);
           }}
           className={[
-            "w-full bg-brand-gray-mid border text-white font-heading text-[0.9rem] tracking-wide px-3.5 py-3 pr-10 outline-none transition-colors duration-200 placeholder:text-white/30",
+            "w-full rounded-[22px] border bg-white px-4 py-3.5 pr-11 size-copy text-[#111111] outline-none transition-colors placeholder:text-store-muted/70",
             disabled
-              ? "border-white/10 text-white/25 cursor-not-allowed"
+              ? "cursor-not-allowed border-[var(--border)] bg-[var(--surface)] text-store-muted/60"
               : error
-                ? "border-red-400/70 focus:border-red-400"
-                : "border-white/15 focus:border-gold-500/40",
+                ? "border-red-400 focus:border-red-400"
+                : "border-[var(--border)] focus:border-store-blue",
           ].join(" ")}
         />
+
         <button
           type="button"
+          disabled={disabled}
           onClick={() => {
             if (!disabled) {
               setIsOpen((current) => !current);
             }
           }}
-          disabled={disabled}
-          className="absolute right-3 top-1/2 -translate-y-1/2 text-white/35"
+          className="absolute right-3 top-1/2 -translate-y-1/2 text-store-muted"
           aria-label={`Open ${label.toLowerCase()} options`}
         >
           {isLoading ? (
-            <span className="block h-4 w-4 rounded-full border-2 border-white/15 border-t-gold-500 animate-spin" />
+            <span className="block h-4 w-4 rounded-full border-2 border-store-blue/20 border-t-store-blue animate-spin" />
           ) : (
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} className="h-4 w-4">
-              <path d="M6 9l6 6 6-6" />
-            </svg>
+            <ChevronDown className="h-4 w-4" />
           )}
         </button>
 
@@ -135,12 +135,10 @@ export function SearchableDropdown({
           <div
             id={listboxId}
             role="listbox"
-            className="absolute z-30 mt-1 max-h-60 w-full overflow-y-auto rounded-none border border-white/10 bg-black shadow-[0_14px_40px_rgba(0,0,0,0.45)]"
+            className="absolute z-30 mt-2 max-h-60 w-full overflow-y-auto rounded-[24px] border border-[var(--border)] bg-white shadow-[0_24px_80px_rgba(17,17,17,0.12)]"
           >
             {isLoading ? (
-              <div className="px-3.5 py-3 text-[0.76rem] font-heading tracking-wide text-white/45">
-                Dang tim...
-              </div>
+              <div className="px-4 py-3 text-sm text-store-muted">Đang tìm...</div>
             ) : options.length ? (
               options.map((option) => (
                 <button
@@ -150,27 +148,22 @@ export function SearchableDropdown({
                     onSelect(option);
                     setIsOpen(false);
                   }}
-                  className="block w-full border-b border-white/[0.06] px-3.5 py-3 text-left font-heading text-[0.84rem] tracking-wide text-white/80 transition-colors hover:bg-gold-500/10 hover:text-gold-500 last:border-b-0"
+                  className="block w-full border-b border-[var(--border)] px-4 py-3 text-left text-sm text-[#111111] transition-colors hover:bg-store-blue-soft last:border-b-0"
                 >
                   {option.name}
                 </button>
               ))
             ) : (
-              <div className="px-3.5 py-3 text-[0.76rem] font-heading tracking-wide text-white/45">
-                {emptyText}
-              </div>
+              <div className="px-4 py-3 text-sm text-store-muted">{emptyText}</div>
             )}
           </div>
         ) : null}
       </div>
+
       {error ? (
-        <p className="mt-1 font-heading text-[0.68rem] text-red-400 tracking-wide">
-          {error}
-        </p>
+        <p className="mt-1.5 text-sm text-red-500">{error}</p>
       ) : helperText ? (
-        <p className="mt-1 font-heading text-[0.68rem] text-white/45 tracking-wide">
-          {helperText}
-        </p>
+        <p className="mt-1.5 text-sm text-store-muted">{helperText}</p>
       ) : null}
     </div>
   );
