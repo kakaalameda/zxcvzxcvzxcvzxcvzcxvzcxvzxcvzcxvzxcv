@@ -147,10 +147,10 @@ export const BRAND_STATS: BrandStat[] = [
 ];
 
 export const BRAND_PERKS: BrandPerk[] = [
-  { title: "Miễn phí giao hàng", text: "Áp dụng cho đơn từ 500K toàn quốc" },
+  { title: "Free Ship", text: "Áp dụng cho đơn từ 500K toàn quốc" },
   { title: "Đổi trả dễ dàng", text: "Hỗ trợ trong 30 ngày nếu cần đổi size" },
   { title: "Đóng gói nhanh", text: "Xử lý và bàn giao đơn trong 24h" },
-  { title: "Làm tại Việt Nam", text: "Thiết kế và hoàn thiện trong nước" },
+  { title: "Made in Vietnam", text: "Thiết kế và hoàn thiện trong nước" },
 ];
 
 export const MARQUEE_ITEMS = [
